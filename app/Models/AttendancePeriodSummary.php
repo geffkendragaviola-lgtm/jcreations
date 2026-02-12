@@ -10,6 +10,7 @@ class AttendancePeriodSummary extends Model
     protected $table = 'attendance_period_summary';
 
     protected $fillable = [
+        'import_batch_id',
         'employee_code',
         'period_start',
         'period_end',
@@ -37,5 +38,10 @@ class AttendancePeriodSummary extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'employee_code', 'employee_code');
+    }
+
+    public function importBatch(): BelongsTo
+    {
+        return $this->belongsTo(AttendanceImportBatch::class, 'import_batch_id');
     }
 }

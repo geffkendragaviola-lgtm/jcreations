@@ -11,15 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('employee_role', function (Blueprint $table) {
-            $table->integer('employee_id');
-            $table->integer('role_id');
-            $table->primary(['employee_id', 'role_id']);
-            $table->timestamps();
-
-            $table->foreign('employee_id')->references('id')->on('employees')->cascadeOnDelete();
-            $table->foreign('role_id')->references('id')->on('roles')->cascadeOnDelete();
-        });
+        if (!Schema::hasTable('roles')) {
+            Schema::create('roles', function (Blueprint $table) {
+                $table->integer('id')->primary();
+                $table->string('name', 50)->unique();
+                $table->text('description')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     /**
@@ -28,5 +27,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('employee_role');
+        Schema::dropIfExists('roles');
     }
 };

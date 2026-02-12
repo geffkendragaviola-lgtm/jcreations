@@ -10,6 +10,7 @@ class AttendanceLog extends Model
     protected $table = 'attendance_logs';
 
     protected $fillable = [
+        'import_batch_id',
         'employee_code',
         'department_snapshot',
         'employee_name_snapshot',
@@ -28,5 +29,10 @@ class AttendanceLog extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'employee_code', 'employee_code');
+    }
+
+    public function importBatch(): BelongsTo
+    {
+        return $this->belongsTo(AttendanceImportBatch::class, 'import_batch_id');
     }
 }

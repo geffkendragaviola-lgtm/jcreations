@@ -226,6 +226,12 @@
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
                         <h1 class="h3 mb-0"><i class="bi bi-clock-history me-2"></i>Employee Time Tracking System</h1>
                         <div class="d-flex flex-wrap align-items-center gap-2">
+                            <div class="d-flex flex-column" style="min-width: 260px;">
+                                <select id="savedBatchSelect" class="form-select form-select-sm" disabled>
+                                    <option value="">Loading...</option>
+                                </select>
+                            </div>
+
                             <div id="uploadArea" class="upload-area upload-area-compact">
                                 <div class="d-flex align-items-center justify-content-between gap-3">
                                     <div class="d-flex align-items-center gap-2">
@@ -243,6 +249,12 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <button id="saveCsvBtn" class="btn btn-sm btn-success" type="button" disabled>
+                                <i class="bi bi-database-check me-1"></i>Save to Database
+                            </button>
+
+                          
                         </div>
                     </div>
                 </div>
@@ -535,6 +547,7 @@
             // DOM elements
             const uploadArea = document.getElementById('uploadArea');
             const csvFileInput = document.getElementById('csvFile');
+            const saveCsvBtn = document.getElementById('saveCsvBtn');
             const loadingIndicator = document.getElementById('loadingIndicator');
             const summarySection = document.getElementById('summarySection');
             const detailsSection = document.getElementById('detailsSection');
@@ -561,6 +574,7 @@
 
             // Event Listeners
             csvFileInput.addEventListener('change', handleFileUpload);
+            if (saveCsvBtn) saveCsvBtn.addEventListener('click', saveCsvToServer);
             uploadArea.addEventListener('dragover', handleDragOver);
             uploadArea.addEventListener('dragleave', handleDragLeave);
             uploadArea.addEventListener('drop', handleDrop);
@@ -699,6 +713,9 @@
 
                 showLoading();
 
+                window.__selectedCsvFile = file;
+                if (saveCsvBtn) saveCsvBtn.disabled = false;
+
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     try {
@@ -713,6 +730,314 @@
                     }
                 };
                 reader.readAsText(file);
+            }
+
+            function saveCsvToServer() {
+                const file = window.__selectedCsvFile;
+                if (!file) {
+                    alert('Please upload a CSV first.');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                if (saveCsvBtn) {
+                    saveCsvBtn.disabled = true;
+                }
+
+                const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                fetch('{{ route('time-tracking.upload-csv') }}', {
+                    method: 'POST',
+                    headers: csrf ? { 'X-CSRF-TOKEN': csrf } : {},
+                    body: formData
+                })
+                .then(async (res) => {
+                    const data = await res.json().catch(() => null);
+                    if (!res.ok) {
+                        const msg = data?.message || 'Save failed.';
+                        throw new Error(msg);
+                    }
+                    return data;
+                })
+                .then((data) => {
+                    const c = data?.counts;
+                    const msg = c
+                        ? `Saved! Logs: ${c.logs}, Daily: ${c.daily_summaries}, Period: ${c.period_summaries}`
+                        : 'Saved!';
+                    alert(msg);
+
+                    const batchUuid = String(data?.batch_uuid || '');
+                    if (batchUuid) {
+                        if (savedBatchSelect) {
+                            savedBatchSelect.value = batchUuid;
+                        }
+                        return loadSavedSummariesByBatch(batchUuid);
+                    }
+                })
+                .catch((err) => {
+                    alert('Server save failed: ' + (err?.message || err));
+                })
+                .finally(() => {
+                    if (saveCsvBtn) {
+                        saveCsvBtn.disabled = false;
+                    }
+                });
+            }
+
+            function loadSavedSummariesByBatch(batchUuid) {
+                const url = new URL("{{ route('time-tracking.summaries') }}", window.location.origin);
+                url.searchParams.set('batch', batchUuid);
+
+                return fetch(url.toString(), {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                })
+                .then(res => res.json())
+                .then((data) => {
+                    const daily = Array.isArray(data?.daily) ? data.daily : [];
+                    const period = Array.isArray(data?.period) ? data.period : [];
+
+                    processedData = daily.map(d => {
+                        const lateIn = Number(d.late_in_minutes || 0);
+                        const lateBreak = Number(d.late_break_in_minutes || 0);
+                        const undertime = Number(d.undertime_break_out_minutes || 0);
+                        const totalLateMinutesOverall = lateIn + lateBreak;
+                        const totalLateFrequency = (lateIn > 0 ? 1 : 0) + (lateBreak > 0 ? 1 : 0);
+
+                        return {
+                            employeeId: d.employee_code,
+                            employeeName: d.employee_name || 'Unknown',
+                            department: d.department || '',
+                            date: d.summary_date,
+                            timeIn: d.time_in,
+                            breakOut: d.break_out,
+                            breakIn: d.break_in,
+                            timeOut: d.time_out,
+                            rawTimeIn: d.time_in,
+                            rawBreakOut: d.break_out,
+                            rawBreakIn: d.break_in,
+                            rawTimeOut: d.time_out,
+                            lateMinutes: lateIn,
+                            lateBreakInMinutes: lateBreak,
+                            undertimeBreakOutMinutes: undertime,
+                            undertimeTimeOutMinutes: 0,
+                            undertimeMinutes: undertime,
+                            overtimeMinutes: Number(d.ot_minutes || 0),
+                            totalLateMinutesOverall,
+                            totalLateFrequency,
+                            withinMorningGrace: !!d.grace_used,
+                            withinAfternoonGrace: false,
+                            graceLateInMinutes: 0,
+                            graceLateBreakInMinutes: 0,
+                            totalHours: (Number(d.total_hours || 0)).toFixed(2),
+                            status: mapDbStatusToUi(d.status),
+                            missedLogs: Number(d.missed_logs || 0),
+                            isWholeDayAbsent: String(d.status || '').toUpperCase() === 'ABSENT'
+                        };
+                    });
+
+                    monthlySummary = {};
+                    period.forEach(p => {
+                        monthlySummary[p.employee_code] = {
+                            employeeName: p.employee_name || 'Unknown',
+                            department: p.department || '',
+                            totalLateFrequency: Number(p.late_frequency || 0),
+                            totalLateMinutes: Number(p.late_duration || 0),
+                            totalUndertime: Number(p.total_undertime || 0),
+                            totalUndertimeFrequency: Number(p.undertime_frequency || 0),
+                            missedLogDays: 0,
+                            missedPunches: Number(p.missed_logs_count || 0),
+                            absentAMCount: 0,
+                            absentPMCount: 0,
+                            wholeDayAbsentCount: Number(p.absences || 0),
+                            halfDayCount: 0,
+                            lateTimes: []
+                        };
+                    });
+
+                    updateDepartmentFilterOptions();
+                    displayResults();
+                })
+                .catch((err) => {
+                    alert('Failed to load saved import: ' + (err?.message || err));
+                });
+            }
+
+            function loadSavedSummaries(start, end) {
+                const url = new URL("{{ route('time-tracking.summaries') }}", window.location.origin);
+                url.searchParams.set('start', start);
+                url.searchParams.set('end', end);
+
+                return fetch(url.toString(), {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                })
+                .then(res => res.json())
+                .then((data) => {
+                    const daily = Array.isArray(data?.daily) ? data.daily : [];
+                    const period = Array.isArray(data?.period) ? data.period : [];
+
+                    processedData = daily.map(d => {
+                        const lateIn = Number(d.late_in_minutes || 0);
+                        const lateBreak = Number(d.late_break_in_minutes || 0);
+                        const undertime = Number(d.undertime_break_out_minutes || 0);
+                        const totalLateMinutesOverall = lateIn + lateBreak;
+                        const totalLateFrequency = (lateIn > 0 ? 1 : 0) + (lateBreak > 0 ? 1 : 0);
+
+                        return {
+                            employeeId: d.employee_code,
+                            employeeName: d.employee_name || 'Unknown',
+                            department: d.department || '',
+                            date: d.summary_date,
+                            timeIn: d.time_in,
+                            breakOut: d.break_out,
+                            breakIn: d.break_in,
+                            timeOut: d.time_out,
+                            rawTimeIn: d.time_in,
+                            rawBreakOut: d.break_out,
+                            rawBreakIn: d.break_in,
+                            rawTimeOut: d.time_out,
+                            lateMinutes: lateIn,
+                            lateBreakInMinutes: lateBreak,
+                            undertimeBreakOutMinutes: undertime,
+                            undertimeTimeOutMinutes: 0,
+                            undertimeMinutes: undertime,
+                            overtimeMinutes: Number(d.ot_minutes || 0),
+                            totalLateMinutesOverall,
+                            totalLateFrequency,
+                            withinMorningGrace: !!d.grace_used,
+                            withinAfternoonGrace: false,
+                            graceLateInMinutes: 0,
+                            graceLateBreakInMinutes: 0,
+                            totalHours: (Number(d.total_hours || 0)).toFixed(2),
+                            status: mapDbStatusToUi(d.status),
+                            missedLogs: Number(d.missed_logs || 0),
+                            isWholeDayAbsent: String(d.status || '').toUpperCase() === 'ABSENT'
+                        };
+                    });
+
+                    monthlySummary = {};
+                    period.forEach(p => {
+                        monthlySummary[p.employee_code] = {
+                            employeeName: p.employee_name || 'Unknown',
+                            department: p.department || '',
+                            totalLateFrequency: Number(p.late_frequency || 0),
+                            totalLateMinutes: Number(p.late_duration || 0),
+                            totalUndertime: Number(p.total_undertime || 0),
+                            totalUndertimeFrequency: Number(p.undertime_frequency || 0),
+                            missedLogDays: 0,
+                            missedPunches: Number(p.missed_logs_count || 0),
+                            absentAMCount: 0,
+                            absentPMCount: 0,
+                            wholeDayAbsentCount: Number(p.absences || 0),
+                            halfDayCount: 0,
+                            lateTimes: []
+                        };
+                    });
+
+                    updateDepartmentFilterOptions();
+                    displayResults();
+                })
+                .catch(() => {
+                    // ignore
+                });
+            }
+
+            const savedBatchSelect = document.getElementById('savedBatchSelect');
+            const viewSavedBtn = document.getElementById('viewSavedBtn');
+
+            function formatBatchLabel(b) {
+                const start = b?.date_start ? String(b.date_start) : '';
+                const end = b?.date_end ? String(b.date_end) : '';
+                const fn = b?.source_filename ? String(b.source_filename) : 'Saved Import';
+                if (start && end) return `${start} to ${end} - ${fn}`;
+                return fn;
+            }
+
+            function loadImportBatchesAndMaybeAutoLoad() {
+                if (!savedBatchSelect) return;
+
+                const url = new URL("{{ route('time-tracking.import-batches') }}", window.location.origin);
+                fetch(url.toString(), {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                })
+                .then(res => res.json())
+                .then((data) => {
+                    const batches = Array.isArray(data?.batches) ? data.batches : [];
+                    savedBatchSelect.innerHTML = '';
+
+                    const opt0 = document.createElement('option');
+                    opt0.value = '';
+                    opt0.textContent = batches.length ? 'Select saved import...' : 'No saved imports yet';
+                    savedBatchSelect.appendChild(opt0);
+
+                    batches.forEach(b => {
+                        const opt = document.createElement('option');
+                        opt.value = String(b.uuid || '');
+                        opt.textContent = formatBatchLabel(b);
+                        savedBatchSelect.appendChild(opt);
+                    });
+
+                    savedBatchSelect.disabled = batches.length === 0;
+
+                    const params = new URLSearchParams(window.location.search);
+                    const batchParam = String(params.get('batch') || '');
+
+                    const toLoad = batchParam || (batches.length ? String(batches[0].uuid || '') : '');
+                    if (toLoad) {
+                        savedBatchSelect.value = toLoad;
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('batch', toLoad);
+                        url.searchParams.delete('saved');
+                        history.replaceState({}, '', url.toString());
+                        loadSavedSummariesByBatch(toLoad);
+                    }
+                })
+                .catch(() => {
+                    savedBatchSelect.innerHTML = '<option value="">Failed to load</option>';
+                    savedBatchSelect.disabled = true;
+                });
+            }
+
+            if (savedBatchSelect) {
+                savedBatchSelect.addEventListener('change', function () {
+                    const uuid = String(savedBatchSelect.value || '');
+                    if (uuid) {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('batch', uuid);
+                        history.replaceState({}, '', url.toString());
+                        loadSavedSummariesByBatch(uuid);
+                    }
+                });
+            }
+
+            if (viewSavedBtn) {
+                viewSavedBtn.addEventListener('click', function () {
+                    if (!savedBatchSelect) return;
+                    const uuid = String(savedBatchSelect.value || '');
+                    if (uuid) {
+                        loadSavedSummariesByBatch(uuid);
+                        return;
+                    }
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('saved', '1');
+                    history.replaceState({}, '', url.toString());
+                    loadImportBatchesAndMaybeAutoLoad();
+                });
+            }
+
+            loadImportBatchesAndMaybeAutoLoad();
+
+            function mapDbStatusToUi(status) {
+                const s = String(status || '').toUpperCase();
+                if (s === 'ON_TIME') return 'Ontime';
+                if (s === 'LATE') return 'Late';
+                if (s === 'UNDERTIME') return 'Undertime';
+                if (s === 'MISSED_LOG') return 'Incomplete Logs';
+                if (s === 'ABSENT') return 'Whole Day Absent';
+                return String(status || '');
             }
 
             function parseCSVLine(line, regex) {
