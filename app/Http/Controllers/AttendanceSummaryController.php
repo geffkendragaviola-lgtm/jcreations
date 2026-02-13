@@ -55,6 +55,10 @@ class AttendanceSummaryController extends Controller
             'batch_uuid' => $batch?->uuid,
             'date_range' => ['start' => $start, 'end' => $end],
             'daily' => $daily->map(function ($d) {
+                $lateMinutes = (int) $d->late_in_minutes + (int) $d->late_break_in_minutes;
+                $undertimeMinutes = (int) $d->undertime_break_out_minutes;
+                $otMinutes = (int) $d->ot_minutes;
+
                 return [
                     'employee_code' => $d->employee_code,
                     'employee_name' => $d->employee?->full_name ?? null,
@@ -69,6 +73,9 @@ class AttendanceSummaryController extends Controller
                     'undertime_break_out_minutes' => (int) $d->undertime_break_out_minutes,
                     'late_break_in_minutes' => (int) $d->late_break_in_minutes,
                     'ot_minutes' => (int) $d->ot_minutes,
+                    'late_hours' => round($lateMinutes / 60, 2),
+                    'undertime_hours' => round($undertimeMinutes / 60, 2),
+                    'ot_hours' => round($otMinutes / 60, 2),
                     'total_hours' => (float) $d->total_hours,
                     'missed_logs' => (int) $d->missed_logs,
                     'status' => $d->status,

@@ -28,11 +28,18 @@ class Employee extends Model
         'phone',
         'department_id',
         'position',
+        'daily_rate',
+        'government_deduction',
         'manager_id',
     ];
 
     public $incrementing = false;
     protected $keyType = 'int';
+
+    protected $casts = [
+        'daily_rate' => 'decimal:2',
+        'government_deduction' => 'decimal:2',
+    ];
 
     public function user(): HasOne
     {
