@@ -15,6 +15,20 @@
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
+
+                    <x-nav-link :href="route('time-tracking.index')" :active="request()->routeIs('time-tracking.*')">
+                        {{ __('Time Tracking') }}
+                    </x-nav-link>
+
+                    @if (auth()->user()?->isAdmin())
+                        <x-nav-link :href="route('payroll.index')" :active="request()->routeIs('payroll.*')">
+                            {{ __('Payroll') }}
+                        </x-nav-link>
+
+                        <x-nav-link :href="route('employees.index')" :active="request()->routeIs('employees.*')">
+                            {{ __('Employees') }}
+                        </x-nav-link>
+                    @endif
                 </div>
             </div>
 
@@ -70,6 +84,20 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+
+            <x-responsive-nav-link :href="route('time-tracking.index')" :active="request()->routeIs('time-tracking.*')">
+                {{ __('Time Tracking') }}
+            </x-responsive-nav-link>
+
+            @if (auth()->user()?->isAdmin())
+                <x-responsive-nav-link :href="route('payroll.index')" :active="request()->routeIs('payroll.*')">
+                    {{ __('Payroll') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('employees.index')" :active="request()->routeIs('employees.*')">
+                    {{ __('Employees') }}
+                </x-responsive-nav-link>
+            @endif
         </div>
 
         <!-- Responsive Settings Options -->

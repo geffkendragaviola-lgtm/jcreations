@@ -61,6 +61,13 @@ Route::match(['get', 'post'], '/payroll', [\App\Http\Controllers\PayrollControll
     ->middleware(['auth', 'verified'])
     ->name('payroll.index');
 
+Route::get('/employees', [\App\Http\Controllers\EmployeeManagementController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('employees.index');
+Route::patch('/employees/{employee}', [\App\Http\Controllers\EmployeeManagementController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('employees.update');
+
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

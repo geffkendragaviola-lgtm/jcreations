@@ -304,6 +304,16 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="col-md-3 col-sm-6 mb-3">
+                    <div class="card summary-card h-100">
+                        <div class="card-body text-center">
+                            <i class="bi bi-calendar-range display-6 text-info mb-2"></i>
+                            <h2 id="periodRange" class="stat-number" style="font-size: 1.1rem;">-</h2>
+                            <p class="stat-label">Period (Start - End)</p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="detailsSection">
@@ -795,6 +805,14 @@
                 })
                 .then(res => res.json())
                 .then((data) => {
+                    const range = data?.date_range;
+                    if (range?.start && range?.end) {
+                        const el = document.getElementById('periodRange');
+                        if (el) {
+                            el.textContent = `${range.start} - ${range.end}`;
+                        }
+                    }
+
                     const daily = Array.isArray(data?.daily) ? data.daily : [];
                     const period = Array.isArray(data?.period) ? data.period : [];
 
@@ -875,6 +893,14 @@
                 })
                 .then(res => res.json())
                 .then((data) => {
+                    const range = data?.date_range;
+                    if (range?.start && range?.end) {
+                        const el = document.getElementById('periodRange');
+                        if (el) {
+                            el.textContent = `${range.start} - ${range.end}`;
+                        }
+                    }
+
                     const daily = Array.isArray(data?.daily) ? data.daily : [];
                     const period = Array.isArray(data?.period) ? data.period : [];
 

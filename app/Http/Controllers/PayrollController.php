@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AttendanceDailySummary;
+use App\Models\AttendanceImportBatch;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
 use App\Models\OvertimeRequest;
@@ -33,14 +34,43 @@ class PayrollController extends Controller
             $otMultiplier = 1;
         }
 
+        $batches = AttendanceImportBatch::query()
+            ->orderByDesc('date_end')
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get();
+
+        $batchUuid = trim((string) $request->input('batch_uuid', ''));
+        $selectedBatch = null;
+        if ($batchUuid !== '') {
+            $selectedBatch = $batches->firstWhere('uuid', $batchUuid);
+        }
+        if (!$selectedBatch && $batches->count() > 0) {
+            $selectedBatch = $batches->first();
+            $batchUuid = (string) $selectedBatch->uuid;
+        }
+
         [$start, $end] = $this->resolveRange($request, $mode);
+
+        if ($selectedBatch) {
+            $start = optional($selectedBatch->date_start)->format('Y-m-d');
+            $end = optional($selectedBatch->date_end)->format('Y-m-d');
+        }
 
         $rows = [];
 
         if ($start && $end) {
             $employees = Employee::query()->with('department')->orderBy('employee_code')->get();
+            $employees = Employee::query()
+                ->with('department')
+                ->whereHas('roles', function ($q) {
+                    $q->where('name', 'employee');
+                })
+                ->orderBy('employee_code')
+                ->get();
 
             $daily = AttendanceDailySummary::query()
+                ->when($selectedBatch, fn ($q) => $q->where('import_batch_id', $selectedBatch->id))
                 ->whereDate('summary_date', '>=', $start)
                 ->whereDate('summary_date', '<=', $end)
                 ->get()
@@ -84,7 +114,21 @@ class PayrollController extends Controller
                 $gov = $request->input('government_deduction.' . $emp->id);
                 $gov = $gov !== null ? (float) $gov : (float) ($emp->government_deduction ?? 0);
 
-                $net = round($gross + $otPay - $lateDeduction - $undertimeDeduction - $absenceDeduction - $gov, 2);
+                $sss = $request->input('sss_deduction.' . $emp->id);
+                $sss = $sss !== null ? (float) $sss : (float) ($emp->sss_deduction ?? 0);
+
+                $pagibig = $request->input('pagibig_deduction.' . $emp->id);
+                $pagibig = $pagibig !== null ? (float) $pagibig : (float) ($emp->pagibig_deduction ?? 0);
+
+                $philhealth = $request->input('philhealth_deduction.' . $emp->id);
+                $philhealth = $philhealth !== null ? (float) $philhealth : (float) ($emp->philhealth_deduction ?? 0);
+
+                $cashAdvance = $request->input('cash_advance_deduction.' . $emp->id);
+                $cashAdvance = $cashAdvance !== null ? (float) $cashAdvance : (float) ($emp->cash_advance_deduction ?? 0);
+
+                $totalDeductions = $gov + $sss + $pagibig + $philhealth + $cashAdvance;
+
+                $net = round($gross + $otPay - $lateDeduction - $undertimeDeduction - $absenceDeduction - $totalDeductions, 2);
 
                 $rows[] = [
                     'employee_id' => $emp->id,
@@ -104,6 +148,11 @@ class PayrollController extends Controller
                     'undertime_deduction' => $undertimeDeduction,
                     'absence_deduction' => $absenceDeduction,
                     'government_deduction' => round($gov, 2),
+                    'sss_deduction' => round($sss, 2),
+                    'pagibig_deduction' => round($pagibig, 2),
+                    'philhealth_deduction' => round($philhealth, 2),
+                    'cash_advance_deduction' => round($cashAdvance, 2),
+                    'total_government_deductions' => round($totalDeductions, 2),
                     'net_pay' => $net,
                 ];
             }
@@ -112,6 +161,10 @@ class PayrollController extends Controller
                 foreach ($rows as $r) {
                     Employee::query()->where('id', $r['employee_id'])->update([
                         'government_deduction' => $r['government_deduction'],
+                        'sss_deduction' => $r['sss_deduction'],
+                        'pagibig_deduction' => $r['pagibig_deduction'],
+                        'philhealth_deduction' => $r['philhealth_deduction'],
+                        'cash_advance_deduction' => $r['cash_advance_deduction'],
                     ]);
                 }
             }
@@ -123,6 +176,8 @@ class PayrollController extends Controller
             'end' => $end,
             'base_hours_per_day' => $baseHoursPerDay,
             'ot_multiplier' => $otMultiplier,
+            'batches' => $batches,
+            'batch_uuid' => $batchUuid,
             'rows' => $rows,
         ]);
     }

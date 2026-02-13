@@ -30,6 +30,10 @@ class Employee extends Model
         'position',
         'daily_rate',
         'government_deduction',
+        'sss_deduction',
+        'pagibig_deduction',
+        'philhealth_deduction',
+        'cash_advance_deduction',
         'manager_id',
     ];
 
@@ -39,6 +43,10 @@ class Employee extends Model
     protected $casts = [
         'daily_rate' => 'decimal:2',
         'government_deduction' => 'decimal:2',
+        'sss_deduction' => 'decimal:2',
+        'pagibig_deduction' => 'decimal:2',
+        'philhealth_deduction' => 'decimal:2',
+        'cash_advance_deduction' => 'decimal:2',
     ];
 
     public function user(): HasOne

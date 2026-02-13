@@ -11,6 +11,19 @@
                 <form method="POST" action="{{ route('payroll.index') }}" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
                     @csrf
 
+                    <div class="md:col-span-6">
+                        <x-input-label for="batch_uuid" :value="__('Time Tracking Saved Import')" />
+                        <select id="batch_uuid" name="batch_uuid" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full">
+                            @forelse ($batches as $b)
+                                <option value="{{ $b->uuid }}" {{ (string) $batch_uuid === (string) $b->uuid ? 'selected' : '' }}>
+                                    {{ optional($b->date_start)->format('Y-m-d') }} to {{ optional($b->date_end)->format('Y-m-d') }} - {{ $b->source_filename ?? 'Saved Import' }}
+                                </option>
+                            @empty
+                                <option value="">No saved imports yet</option>
+                            @endforelse
+                        </select>
+                    </div>
+
                     <div>
                         <x-input-label for="mode" :value="__('Period')" />
                         <select id="mode" name="mode" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full">
@@ -64,7 +77,12 @@
                                         <th class="text-left py-2">Undertime (hrs)</th>
                                         <th class="text-left py-2">Approved OT (hrs)</th>
                                         <th class="text-left py-2">Approved Absences (days)</th>
-                                        <th class="text-left py-2">Gov Deduction</th>
+                                        <th class="text-left py-2">Gov</th>
+                                        <th class="text-left py-2">SSS</th>
+                                        <th class="text-left py-2">Pag-IBIG</th>
+                                        <th class="text-left py-2">PhilHealth</th>
+                                        <th class="text-left py-2">Cash Adv</th>
+                                        <th class="text-left py-2">Total Deductions</th>
                                         <th class="text-left py-2">Net Pay</th>
                                     </tr>
                                 </thead>
@@ -78,9 +96,22 @@
                                             <td class="py-2">{{ number_format($r['undertime_hours'], 2) }}</td>
                                             <td class="py-2">{{ number_format($r['approved_ot_hours'], 2) }}</td>
                                             <td class="py-2">{{ $r['approved_absence_days'] }}</td>
-                                            <td class="py-2" style="min-width: 160px;">
+                                            <td class="py-2" style="min-width: 120px;">
                                                 <input type="number" step="0.01" name="government_deduction[{{ $r['employee_id'] }}]" value="{{ old('government_deduction.' . $r['employee_id'], $r['government_deduction']) }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
                                             </td>
+                                            <td class="py-2" style="min-width: 120px;">
+                                                <input type="number" step="0.01" name="sss_deduction[{{ $r['employee_id'] }}]" value="{{ old('sss_deduction.' . $r['employee_id'], $r['sss_deduction']) }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
+                                            </td>
+                                            <td class="py-2" style="min-width: 120px;">
+                                                <input type="number" step="0.01" name="pagibig_deduction[{{ $r['employee_id'] }}]" value="{{ old('pagibig_deduction.' . $r['employee_id'], $r['pagibig_deduction']) }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
+                                            </td>
+                                            <td class="py-2" style="min-width: 120px;">
+                                                <input type="number" step="0.01" name="philhealth_deduction[{{ $r['employee_id'] }}]" value="{{ old('philhealth_deduction.' . $r['employee_id'], $r['philhealth_deduction']) }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
+                                            </td>
+                                            <td class="py-2" style="min-width: 120px;">
+                                                <input type="number" step="0.01" name="cash_advance_deduction[{{ $r['employee_id'] }}]" value="{{ old('cash_advance_deduction.' . $r['employee_id'], $r['cash_advance_deduction']) }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
+                                            </td>
+                                            <td class="py-2">{{ number_format($r['total_government_deductions'], 2) }}</td>
                                             <td class="py-2">{{ number_format($r['net_pay'], 2) }}</td>
                                         </tr>
                                     @endforeach
