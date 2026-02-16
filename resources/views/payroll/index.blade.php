@@ -61,7 +61,7 @@
                     <div class="md:col-span-6">
                         <label class="inline-flex items-center gap-2">
                             <input type="checkbox" name="save_government_deduction" value="1" class="rounded border-gray-300">
-                            <span class="text-sm text-gray-700">Save government deduction defaults</span>
+                            <span class="text-sm text-gray-700">Save cash advance default</span>
                         </label>
                     </div>
 
@@ -77,12 +77,12 @@
                                         <th class="text-left py-2">Undertime (hrs)</th>
                                         <th class="text-left py-2">Approved OT (hrs)</th>
                                         <th class="text-left py-2">Approved Absences (days)</th>
-                                        <th class="text-left py-2">Gov</th>
                                         <th class="text-left py-2">SSS</th>
                                         <th class="text-left py-2">Pag-IBIG</th>
                                         <th class="text-left py-2">PhilHealth</th>
                                         <th class="text-left py-2">Cash Adv</th>
                                         <th class="text-left py-2">Total Deductions</th>
+                                        <th class="text-left py-2">Gross Pay</th>
                                         <th class="text-left py-2">Net Pay</th>
                                     </tr>
                                 </thead>
@@ -97,22 +97,97 @@
                                             <td class="py-2">{{ number_format($r['approved_ot_hours'], 2) }}</td>
                                             <td class="py-2">{{ $r['approved_absence_days'] }}</td>
                                             <td class="py-2" style="min-width: 120px;">
-                                                <input type="number" step="0.01" name="government_deduction[{{ $r['employee_id'] }}]" value="{{ old('government_deduction.' . $r['employee_id'], $r['government_deduction']) }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
+                                                {{ number_format($r['sss_deduction'], 2) }}
                                             </td>
                                             <td class="py-2" style="min-width: 120px;">
-                                                <input type="number" step="0.01" name="sss_deduction[{{ $r['employee_id'] }}]" value="{{ old('sss_deduction.' . $r['employee_id'], $r['sss_deduction']) }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
+                                                {{ number_format($r['pagibig_deduction'], 2) }}
                                             </td>
                                             <td class="py-2" style="min-width: 120px;">
-                                                <input type="number" step="0.01" name="pagibig_deduction[{{ $r['employee_id'] }}]" value="{{ old('pagibig_deduction.' . $r['employee_id'], $r['pagibig_deduction']) }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
-                                            </td>
-                                            <td class="py-2" style="min-width: 120px;">
-                                                <input type="number" step="0.01" name="philhealth_deduction[{{ $r['employee_id'] }}]" value="{{ old('philhealth_deduction.' . $r['employee_id'], $r['philhealth_deduction']) }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
+                                                {{ number_format($r['philhealth_deduction'], 2) }}
                                             </td>
                                             <td class="py-2" style="min-width: 120px;">
                                                 <input type="number" step="0.01" name="cash_advance_deduction[{{ $r['employee_id'] }}]" value="{{ old('cash_advance_deduction.' . $r['employee_id'], $r['cash_advance_deduction']) }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
                                             </td>
-                                            <td class="py-2">{{ number_format($r['total_government_deductions'], 2) }}</td>
-                                            <td class="py-2">{{ number_format($r['net_pay'], 2) }}</td>
+                                            <td class="py-2">{{ number_format($r['fixed_deductions_total'], 2) }}</td>
+                                            <td class="py-2">{{ number_format($r['gross_pay'], 2) }}</td>
+                                            <td class="py-2" style="min-width: 140px;">
+                                                <button type="button" class="text-indigo-700 hover:underline font-semibold" x-data="" x-on:click.prevent="$dispatch('open-modal', 'payroll-breakdown-{{ $r['employee_id'] }}')">
+                                                    {{ number_format($r['net_pay'], 2) }}
+                                                </button>
+
+                                                <x-modal name="payroll-breakdown-{{ $r['employee_id'] }}" :show="false" focusable>
+                                                    <div class="p-6 space-y-4">
+                                                        <div class="text-lg font-medium text-gray-900">Payroll Breakdown</div>
+                                                        <div class="text-sm text-gray-600">{{ $r['employee_code'] }} - {{ $r['employee_name'] }}</div>
+
+                                                        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-2">
+                                                            <div class="text-sm text-gray-700">
+                                                                <span class="font-semibold">Date Range:</span>
+                                                                {{ $r['range_start'] ?? '-' }} to {{ $r['range_end'] ?? '-' }}
+                                                            </div>
+                                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-700">
+                                                                <div><span class="font-semibold">Daily Rate:</span> {{ number_format($r['daily_rate'], 2) }}</div>
+                                                                <div><span class="font-semibold">Hourly Rate:</span> {{ number_format($r['hourly_rate'], 2) }}</div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            <div class="rounded-lg border border-gray-200 p-4 space-y-2">
+                                                                <div class="text-sm font-semibold text-gray-900">Earnings</div>
+                                                                <div class="text-sm text-gray-700 flex justify-between">
+                                                                    <span>Gross Pay ({{ $r['days_worked'] }} days)</span>
+                                                                    <span class="font-semibold">{{ number_format($r['gross_pay'], 2) }}</span>
+                                                                </div>
+                                                                <div class="text-sm text-gray-700 flex justify-between">
+                                                                    <span>OT Pay ({{ number_format($r['approved_ot_hours'], 2) }} hrs)</span>
+                                                                    <span class="font-semibold">{{ number_format($r['ot_pay'], 2) }}</span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="rounded-lg border border-gray-200 p-4 space-y-2">
+                                                                <div class="text-sm font-semibold text-gray-900">Penalties</div>
+                                                                <div class="text-sm text-gray-700 flex justify-between">
+                                                                    <span>Late ({{ number_format($r['late_hours'], 2) }} hrs)</span>
+                                                                    <span class="font-semibold">-{{ number_format($r['late_deduction'], 2) }}</span>
+                                                                </div>
+                                                                <div class="text-sm text-gray-700 flex justify-between">
+                                                                    <span>Undertime ({{ number_format($r['undertime_hours'], 2) }} hrs)</span>
+                                                                    <span class="font-semibold">-{{ number_format($r['undertime_deduction'], 2) }}</span>
+                                                                </div>
+                                                                <div class="text-sm text-gray-700 flex justify-between">
+                                                                    <span>Absence ({{ $r['approved_absence_days'] }} days)</span>
+                                                                    <span class="font-semibold">-{{ number_format($r['absence_deduction'], 2) }}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="rounded-lg border border-gray-200 p-4 space-y-2">
+                                                            <div class="text-sm font-semibold text-gray-900">Fixed Deductions</div>
+                                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-700">
+                                                                <div class="flex justify-between"><span>SSS</span><span class="font-semibold">-{{ number_format($r['sss_deduction'], 2) }}</span></div>
+                                                                <div class="flex justify-between"><span>Pag-IBIG</span><span class="font-semibold">-{{ number_format($r['pagibig_deduction'], 2) }}</span></div>
+                                                                <div class="flex justify-between"><span>PhilHealth</span><span class="font-semibold">-{{ number_format($r['philhealth_deduction'], 2) }}</span></div>
+                                                                <div class="flex justify-between"><span>Cash Advance</span><span class="font-semibold">-{{ number_format($r['cash_advance_deduction'], 2) }}</span></div>
+                                                            </div>
+                                                            <div class="text-sm text-gray-900 flex justify-between border-t pt-2">
+                                                                <span class="font-semibold">Total Fixed Deductions</span>
+                                                                <span class="font-semibold">-{{ number_format($r['fixed_deductions_total'], 2) }}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+                                                            <div class="text-sm text-gray-900 flex justify-between">
+                                                                <span class="font-semibold">Net Pay</span>
+                                                                <span class="font-semibold">{{ number_format($r['net_pay'], 2) }}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="flex justify-end">
+                                                            <x-secondary-button x-on:click="$dispatch('close-modal', 'payroll-breakdown-{{ $r['employee_id'] }}')">Close</x-secondary-button>
+                                                        </div>
+                                                    </div>
+                                                </x-modal>
+                                            </td>
                                         </tr>
                                     @endforeach
                                 </tbody>

@@ -28,6 +28,14 @@
                         <x-nav-link :href="route('employees.index')" :active="request()->routeIs('employees.*')">
                             {{ __('Employees') }}
                         </x-nav-link>
+
+                        <x-nav-link :href="route('work-schedules.index')" :active="request()->routeIs('work-schedules.*')">
+                            {{ __('Work Schedules') }}
+                        </x-nav-link>
+
+                        <x-nav-link :href="route('departments.index')" :active="request()->routeIs('departments.*')">
+                            {{ __('Departments') }}
+                        </x-nav-link>
                     @endif
                 </div>
             </div>
@@ -96,6 +104,14 @@
 
                 <x-responsive-nav-link :href="route('employees.index')" :active="request()->routeIs('employees.*')">
                     {{ __('Employees') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('work-schedules.index')" :active="request()->routeIs('work-schedules.*')">
+                    {{ __('Work Schedules') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('departments.index')" :active="request()->routeIs('departments.*')">
+                    {{ __('Departments') }}
                 </x-responsive-nav-link>
             @endif
         </div>

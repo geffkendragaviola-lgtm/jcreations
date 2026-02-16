@@ -6,6 +6,7 @@ use App\Models\AttendanceDailySummary;
 use App\Models\AttendanceLog;
 use App\Models\Department;
 use App\Models\EmployeeSchedule;
+use App\Models\EmployeeScheduleOverride;
 use App\Models\LeaveRequest;
 use App\Models\OvertimeRequest;
 use App\Models\Role;
@@ -87,6 +88,11 @@ class Employee extends Model
     public function schedules(): HasMany
     {
         return $this->hasMany(EmployeeSchedule::class);
+    }
+
+    public function scheduleOverrides(): HasMany
+    {
+        return $this->hasMany(EmployeeScheduleOverride::class);
     }
 
     public function attendanceLogs(): HasMany

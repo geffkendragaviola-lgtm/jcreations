@@ -64,9 +64,38 @@ Route::match(['get', 'post'], '/payroll', [\App\Http\Controllers\PayrollControll
 Route::get('/employees', [\App\Http\Controllers\EmployeeManagementController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('employees.index');
+Route::get('/employees/{employee}', function () {
+    return redirect()->route('employees.index');
+})->middleware(['auth', 'verified']);
 Route::patch('/employees/{employee}', [\App\Http\Controllers\EmployeeManagementController::class, 'update'])
     ->middleware(['auth', 'verified'])
     ->name('employees.update');
+Route::delete('/employees/{employee}', [\App\Http\Controllers\EmployeeManagementController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('employees.destroy');
+
+Route::get('/work-schedules', [\App\Http\Controllers\WorkScheduleController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('work-schedules.index');
+Route::patch('/work-schedules/{employee}', [\App\Http\Controllers\WorkScheduleController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('work-schedules.update');
+Route::get('/work-schedules/{employee}/calendar', [\App\Http\Controllers\WorkScheduleController::class, 'calendar'])
+    ->middleware(['auth', 'verified'])
+    ->name('work-schedules.calendar');
+Route::patch('/work-schedules/{employee}/override', [\App\Http\Controllers\WorkScheduleController::class, 'updateOverride'])
+    ->middleware(['auth', 'verified'])
+    ->name('work-schedules.override');
+
+Route::get('/departments', [\App\Http\Controllers\DepartmentManagementController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('departments.index');
+Route::post('/departments', [\App\Http\Controllers\DepartmentManagementController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('departments.store');
+Route::patch('/departments/{department}', [\App\Http\Controllers\DepartmentManagementController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('departments.update');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

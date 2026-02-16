@@ -111,22 +111,18 @@ class PayrollController extends Controller
 
                 $otPay = round($otHours * $hourlyRate * $otMultiplier, 2);
 
-                $gov = $request->input('government_deduction.' . $emp->id);
-                $gov = $gov !== null ? (float) $gov : (float) ($emp->government_deduction ?? 0);
+                $sss = (float) ($emp->sss_deduction ?? 0);
 
-                $sss = $request->input('sss_deduction.' . $emp->id);
-                $sss = $sss !== null ? (float) $sss : (float) ($emp->sss_deduction ?? 0);
+                $pagibig = (float) ($emp->pagibig_deduction ?? 0);
 
-                $pagibig = $request->input('pagibig_deduction.' . $emp->id);
-                $pagibig = $pagibig !== null ? (float) $pagibig : (float) ($emp->pagibig_deduction ?? 0);
+                $philhealth = (float) ($emp->philhealth_deduction ?? 0);
 
-                $philhealth = $request->input('philhealth_deduction.' . $emp->id);
-                $philhealth = $philhealth !== null ? (float) $philhealth : (float) ($emp->philhealth_deduction ?? 0);
+                $gov = $sss + $pagibig + $philhealth;
 
                 $cashAdvance = $request->input('cash_advance_deduction.' . $emp->id);
                 $cashAdvance = $cashAdvance !== null ? (float) $cashAdvance : (float) ($emp->cash_advance_deduction ?? 0);
 
-                $totalDeductions = $gov + $sss + $pagibig + $philhealth + $cashAdvance;
+                $totalDeductions = $gov + $cashAdvance;
 
                 $net = round($gross + $otPay - $lateDeduction - $undertimeDeduction - $absenceDeduction - $totalDeductions, 2);
 
@@ -135,6 +131,8 @@ class PayrollController extends Controller
                     'employee_code' => $emp->employee_code,
                     'employee_name' => $emp->full_name,
                     'department' => $emp->department?->name,
+                    'range_start' => $start,
+                    'range_end' => $end,
                     'daily_rate' => $dailyRate,
                     'hourly_rate' => round($hourlyRate, 2),
                     'days_worked' => $daysWorked,
@@ -152,6 +150,7 @@ class PayrollController extends Controller
                     'pagibig_deduction' => round($pagibig, 2),
                     'philhealth_deduction' => round($philhealth, 2),
                     'cash_advance_deduction' => round($cashAdvance, 2),
+                    'fixed_deductions_total' => round($totalDeductions, 2),
                     'total_government_deductions' => round($totalDeductions, 2),
                     'net_pay' => $net,
                 ];
@@ -160,10 +159,6 @@ class PayrollController extends Controller
             if ($request->isMethod('post') && (string) $request->input('save_government_deduction', '') === '1') {
                 foreach ($rows as $r) {
                     Employee::query()->where('id', $r['employee_id'])->update([
-                        'government_deduction' => $r['government_deduction'],
-                        'sss_deduction' => $r['sss_deduction'],
-                        'pagibig_deduction' => $r['pagibig_deduction'],
-                        'philhealth_deduction' => $r['philhealth_deduction'],
                         'cash_advance_deduction' => $r['cash_advance_deduction'],
                     ]);
                 }
