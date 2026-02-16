@@ -19,7 +19,7 @@ class WorkScheduleController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 
@@ -54,7 +54,7 @@ class WorkScheduleController extends Controller
     public function update(Request $request, Employee $employee): RedirectResponse
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 
@@ -135,7 +135,7 @@ class WorkScheduleController extends Controller
     public function calendar(Request $request, Employee $employee)
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 
@@ -241,7 +241,7 @@ class WorkScheduleController extends Controller
     public function updateOverride(Request $request, Employee $employee): RedirectResponse
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 

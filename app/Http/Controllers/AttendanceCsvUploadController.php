@@ -15,6 +15,11 @@ class AttendanceCsvUploadController extends Controller
 {
     public function store(Request $request)
     {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'file' => ['required', 'file', 'mimes:csv,txt', 'max:51200'],
         ]);
@@ -193,10 +198,34 @@ class AttendanceCsvUploadController extends Controller
         $dailyRows = array_map(fn ($r) => array_merge($r, ['import_batch_id' => $batch->id]), $dailyRows);
         $periodRows = array_map(fn ($r) => array_merge($r, ['import_batch_id' => $batch->id]), $periodRows);
 
-        DB::transaction(function () use ($batch, $logRows, $dailyRows, $periodRows) {
-            AttendanceLog::query()->where('import_batch_id', $batch->id)->delete();
-            AttendanceDailySummary::query()->where('import_batch_id', $batch->id)->delete();
-            AttendancePeriodSummary::query()->where('import_batch_id', $batch->id)->delete();
+        $affectedEmployeeCodes = collect($logRows)
+            ->pluck('employee_code')
+            ->unique()
+            ->values()
+            ->all();
+
+        DB::transaction(function () use ($batch, $logRows, $dailyRows, $periodRows, $affectedEmployeeCodes, $minDate, $maxDate) {
+            // Overwrite behavior: if the new CSV includes dates that already exist in the database,
+            // delete the overlapping rows (across ALL batches) and then insert the new ones.
+            AttendanceLog::query()
+                ->whereIn('employee_code', $affectedEmployeeCodes)
+                ->whereDate('log_date', '>=', $minDate)
+                ->whereDate('log_date', '<=', $maxDate)
+                ->delete();
+
+            AttendanceDailySummary::query()
+                ->whereIn('employee_code', $affectedEmployeeCodes)
+                ->whereDate('summary_date', '>=', $minDate)
+                ->whereDate('summary_date', '<=', $maxDate)
+                ->delete();
+
+            // Period summaries may overlap the incoming range even if their period_start/period_end
+            // doesn't exactly match the new upload range.
+            AttendancePeriodSummary::query()
+                ->whereIn('employee_code', $affectedEmployeeCodes)
+                ->whereDate('period_start', '<=', $maxDate)
+                ->whereDate('period_end', '>=', $minDate)
+                ->delete();
 
             AttendanceLog::query()->upsert(
                 $logRows,

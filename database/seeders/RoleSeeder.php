@@ -15,6 +15,8 @@ class RoleSeeder extends Seeder
             ['id' => 1, 'name' => 'admin', 'description' => 'System administrator'],
             ['id' => 2, 'name' => 'manager', 'description' => 'Department manager'],
             ['id' => 3, 'name' => 'employee', 'description' => 'Regular employee'],
+            ['id' => 4, 'name' => 'hr', 'description' => 'Human resources'],
+            ['id' => 5, 'name' => 'sales clerk', 'description' => 'Sales clerk'],
         ];
 
         $rows = array_map(function ($r) use ($now) {

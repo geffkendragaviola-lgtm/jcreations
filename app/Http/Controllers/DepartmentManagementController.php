@@ -12,7 +12,7 @@ class DepartmentManagementController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 
@@ -28,7 +28,7 @@ class DepartmentManagementController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 
@@ -68,7 +68,7 @@ class DepartmentManagementController extends Controller
     public function update(Request $request, Department $department): RedirectResponse
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 

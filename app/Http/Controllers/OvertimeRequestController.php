@@ -72,7 +72,7 @@ class OvertimeRequestController extends Controller
     public function approve(Request $request, int $id): RedirectResponse
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 
@@ -87,7 +87,7 @@ class OvertimeRequestController extends Controller
     public function reject(Request $request, int $id): RedirectResponse
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 

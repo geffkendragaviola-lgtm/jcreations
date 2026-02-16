@@ -250,11 +250,7 @@
                                 </div>
                             </div>
 
-                            <button id="saveCsvBtn" class="btn btn-sm btn-success" type="button" disabled>
-                                <i class="bi bi-database-check me-1"></i>Save to Database
-                            </button>
 
-                          
                         </div>
                     </div>
                 </div>
@@ -545,6 +541,8 @@
             const MAX_BREAK_IN_DISTANCE_MINUTES = 180;
             const LUNCH_DURATION = 60; // minutes
             const DEDUPE_WINDOW_MINUTES = 2; // punches within this many minutes = same punch (double-tap/lag); keep one only
+
+            const DEPARTMENT_SCHEDULES = @json($departmentSchedules ?? []);
             let employeeData = [];
             let processedData = [];
             let monthlySummary = [];
@@ -584,7 +582,7 @@
 
             // Event Listeners
             csvFileInput.addEventListener('change', handleFileUpload);
-            if (saveCsvBtn) saveCsvBtn.addEventListener('click', saveCsvToServer);
+            
             uploadArea.addEventListener('dragover', handleDragOver);
             uploadArea.addEventListener('dragleave', handleDragLeave);
             uploadArea.addEventListener('drop', handleDrop);
@@ -724,7 +722,6 @@
                 showLoading();
 
                 window.__selectedCsvFile = file;
-                if (saveCsvBtn) saveCsvBtn.disabled = false;
 
                 const reader = new FileReader();
                 reader.onload = function(e) {
@@ -734,6 +731,8 @@
                         processData();
                         updateDepartmentFilterOptions();
                         displayResults();
+
+                        saveCsvToServer();
                     } catch (error) {
                         alert('Error processing CSV file: ' + error.message);
                         hideLoading();
@@ -1308,14 +1307,11 @@
             function getScheduleForDepartment(department) {
                 const d = normalizeDepartmentForSchedule(department);
 
-                if (d === 'shop') {
-                    return { start: '08:00:00', end: '17:00:00' };
-                }
-                if (d === 'ct print shop' || d === 'ecotrade' || d === 'shop / eco' || d === 'shop/eco') {
-                    return { start: '08:30:00', end: '17:30:00' };
-                }
-                if (d === 'jct') {
-                    return { start: '09:00:00', end: '18:00:00' };
+                if (d && DEPARTMENT_SCHEDULES && DEPARTMENT_SCHEDULES[d]) {
+                    const sched = DEPARTMENT_SCHEDULES[d] || {};
+                    const start = sched.start || WORK_START_TIME;
+                    const end = sched.end || '17:00:00';
+                    return { start, end };
                 }
 
                 return { start: WORK_START_TIME, end: '17:00:00' };

@@ -12,12 +12,12 @@ class DepartmentSeeder extends Seeder
         $now = now();
 
         $departments = [
-            ['id' => 1, 'name' => 'Shop'],
-            ['id' => 2, 'name' => 'Ecotrade'],
-            ['id' => 3, 'name' => 'JCT'],
-            ['id' => 4, 'name' => 'CT Print Stop'],
-            ['id' => 5, 'name' => 'Shop / Eco'],
-            ['id' => 6, 'name' => 'JCT Print Stop'],
+            ['id' => 1, 'name' => 'Shop', 'business_hours_start' => '08:00:00', 'business_hours_end' => '17:00:00'],
+            ['id' => 2, 'name' => 'Ecotrade', 'business_hours_start' => '08:30:00', 'business_hours_end' => '17:30:00'],
+            ['id' => 3, 'name' => 'JCT', 'business_hours_start' => '09:00:00', 'business_hours_end' => '18:00:00'],
+            ['id' => 4, 'name' => 'CT Print Stop', 'business_hours_start' => '08:30:00', 'business_hours_end' => '17:30:00'],
+            ['id' => 5, 'name' => 'Shop / Eco', 'business_hours_start' => '08:30:00', 'business_hours_end' => '17:30:00'],
+           
         ];
 
         $rows = array_map(function ($d) use ($now) {
@@ -25,8 +25,8 @@ class DepartmentSeeder extends Seeder
                 'id' => $d['id'],
                 'name' => $d['name'],
                 'description' => null,
-                'business_hours_start' => null,
-                'business_hours_end' => null,
+                'business_hours_start' => $d['business_hours_start'] ?? null,
+                'business_hours_end' => $d['business_hours_end'] ?? null,
                 'created_at' => $now,
                 'updated_at' => $now,
             ];

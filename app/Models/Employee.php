@@ -27,15 +27,34 @@ class Employee extends Model
         'last_name',
         'email',
         'phone',
+        'work_email',
+        'work_phone',
+        'work_mobile',
+        'bank_account_no',
+        'sss_no',
+        'philhealth_no',
+        'hdmf_no',
+        'tax_id_no',
         'department_id',
         'position',
         'daily_rate',
+        'wage',
+        'hourly_rate',
+        'hourly_rate_overtime',
         'government_deduction',
         'sss_deduction',
         'pagibig_deduction',
         'philhealth_deduction',
         'cash_advance_deduction',
         'manager_id',
+        'contract_start_date',
+        'contract_end_date',
+        'working_schedule',
+        'minimum_wage_earner',
+        'salary_structure_type',
+        'contract_type',
+        'salary_schedule_pay',
+        'salary_structure',
     ];
 
     public $incrementing = false;
@@ -43,11 +62,17 @@ class Employee extends Model
 
     protected $casts = [
         'daily_rate' => 'decimal:2',
+        'wage' => 'decimal:2',
+        'hourly_rate' => 'decimal:4',
+        'hourly_rate_overtime' => 'decimal:4',
         'government_deduction' => 'decimal:2',
         'sss_deduction' => 'decimal:2',
         'pagibig_deduction' => 'decimal:2',
         'philhealth_deduction' => 'decimal:2',
         'cash_advance_deduction' => 'decimal:2',
+        'contract_start_date' => 'date',
+        'contract_end_date' => 'date',
+        'minimum_wage_earner' => 'boolean',
     ];
 
     public function user(): HasOne

@@ -30,7 +30,7 @@ class EmployeeManagementController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 
@@ -68,10 +68,24 @@ class EmployeeManagementController extends Controller
         ]);
     }
 
+    public function show(Request $request, Employee $employee)
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        $employee->load(['department', 'manager']);
+
+        return view('employees.show', [
+            'employee' => $employee,
+        ]);
+    }
+
     public function update(Request $request, Employee $employee)
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 
@@ -81,10 +95,29 @@ class EmployeeManagementController extends Controller
             'last_name' => ['required', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:100', 'unique:employees,email,' . $employee->id . ',id'],
             'phone' => ['nullable', 'string', 'max:20'],
+            'work_email' => ['nullable', 'email', 'max:100'],
+            'work_phone' => ['nullable', 'string', 'max:20'],
+            'work_mobile' => ['nullable', 'string', 'max:20'],
+            'bank_account_no' => ['nullable', 'string', 'max:50'],
+            'sss_no' => ['nullable', 'string', 'max:50'],
+            'philhealth_no' => ['nullable', 'string', 'max:50'],
+            'hdmf_no' => ['nullable', 'string', 'max:50'],
+            'tax_id_no' => ['nullable', 'string', 'max:50'],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'position' => ['nullable', 'string', 'max:100'],
             'manager_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'contract_start_date' => ['nullable', 'date'],
+            'contract_end_date' => ['nullable', 'date', 'after_or_equal:contract_start_date'],
+            'working_schedule' => ['nullable', 'string', 'max:100'],
+            'minimum_wage_earner' => ['nullable', 'boolean'],
+            'salary_structure_type' => ['nullable', 'in:daily,monthly'],
+            'contract_type' => ['nullable', 'in:Permanent,Temporary,Seasonal,Full-Time,Part-Time,Rank and File,Executive'],
+            'salary_schedule_pay' => ['nullable', 'string', 'max:50'],
+            'salary_structure' => ['nullable', 'in:Base for Monthly structures,Base for Monthly structures - First Cut-Off,Base for Monthly structures - Second Cut-Off,Base for Daily structures,Base for 13th Month Pay Structure'],
             'daily_rate' => ['nullable', 'numeric', 'min:0'],
+            'wage' => ['nullable', 'numeric', 'min:0'],
+            'hourly_rate' => ['nullable', 'numeric', 'min:0'],
+            'hourly_rate_overtime' => ['nullable', 'numeric', 'min:0'],
             'sss_deduction' => ['nullable', 'numeric', 'min:0'],
             'pagibig_deduction' => ['nullable', 'numeric', 'min:0'],
             'philhealth_deduction' => ['nullable', 'numeric', 'min:0'],
@@ -93,6 +126,9 @@ class EmployeeManagementController extends Controller
 
         foreach ([
             'daily_rate',
+            'wage',
+            'hourly_rate',
+            'hourly_rate_overtime',
             'sss_deduction',
             'pagibig_deduction',
             'philhealth_deduction',
@@ -100,6 +136,28 @@ class EmployeeManagementController extends Controller
         ] as $field) {
             if (!array_key_exists($field, $data) || $data[$field] === null || $data[$field] === '') {
                 $data[$field] = 0;
+            }
+        }
+
+        if (!array_key_exists('minimum_wage_earner', $data) || $data['minimum_wage_earner'] === null || $data['minimum_wage_earner'] === '') {
+            $data['minimum_wage_earner'] = false;
+        }
+
+        if (array_key_exists('wage', $data) && $data['wage'] !== null) {
+            $wage = (float) $data['wage'];
+
+            $salaryStructureType = (string) ($data['salary_structure_type'] ?? 'daily');
+            if ($salaryStructureType === '') {
+                $salaryStructureType = 'daily';
+            }
+
+            if ($salaryStructureType === 'monthly') {
+                $daily = $wage / 22;
+                $data['daily_rate'] = $daily;
+                $data['hourly_rate'] = $daily / 8;
+            } else {
+                $data['daily_rate'] = $wage;
+                $data['hourly_rate'] = $wage / 8;
             }
         }
 
@@ -117,7 +175,7 @@ class EmployeeManagementController extends Controller
     public function destroy(Request $request, Employee $employee)
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 

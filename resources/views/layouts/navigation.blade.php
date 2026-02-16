@@ -20,9 +20,13 @@
                         {{ __('Time Tracking') }}
                     </x-nav-link>
 
-                    @if (auth()->user()?->isAdmin())
+                    @if (auth()->user()?->canManageBackoffice())
                         <x-nav-link :href="route('payroll.index')" :active="request()->routeIs('payroll.*')">
                             {{ __('Payroll') }}
+                        </x-nav-link>
+
+                        <x-nav-link :href="route('approvals.index')" :active="request()->routeIs('approvals.*')">
+                            {{ __('Approvals') }}
                         </x-nav-link>
 
                         <x-nav-link :href="route('employees.index')" :active="request()->routeIs('employees.*')">
@@ -97,9 +101,13 @@
                 {{ __('Time Tracking') }}
             </x-responsive-nav-link>
 
-            @if (auth()->user()?->isAdmin())
+            @if (auth()->user()?->canManageBackoffice())
                 <x-responsive-nav-link :href="route('payroll.index')" :active="request()->routeIs('payroll.*')">
                     {{ __('Payroll') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('approvals.index')" :active="request()->routeIs('approvals.*')">
+                    {{ __('Approvals') }}
                 </x-responsive-nav-link>
 
                 <x-responsive-nav-link :href="route('employees.index')" :active="request()->routeIs('employees.*')">

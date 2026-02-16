@@ -44,6 +44,11 @@ class User extends Authenticatable
         return $this->hasRole('admin') || $this->hasRole('manager');
     }
 
+    public function canManageBackoffice(): bool
+    {
+        return $this->hasRole('admin') || $this->hasRole('hr') || $this->hasRole('sales clerk');
+    }
+
     public function isManager()
     {
         return $this->hasRole('manager');

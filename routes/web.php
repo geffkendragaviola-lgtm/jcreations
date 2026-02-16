@@ -7,12 +7,35 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 Route::get('/time-tracking', function () {
-    return view('time-tracking.index');
+    $user = request()->user();
+    if (!$user?->canManageBackoffice()) {
+        abort(403);
+    }
+
+    $departments = \App\Models\Department::query()
+        ->select(['name', 'business_hours_start', 'business_hours_end'])
+        ->orderBy('name')
+        ->get();
+
+    $departmentSchedules = [];
+    foreach ($departments as $dept) {
+        $name = (string) ($dept->name ?? '');
+        $key = strtolower(trim(preg_replace('/\s+/', ' ', $name)));
+
+        $departmentSchedules[$key] = [
+            'start' => $dept->business_hours_start,
+            'end' => $dept->business_hours_end,
+        ];
+    }
+
+    return view('time-tracking.index', [
+        'departmentSchedules' => $departmentSchedules,
+    ]);
 })->middleware(['auth', 'verified'])->name('time-tracking.index');
 
 Route::post('/time-tracking/upload-csv', [\App\Http\Controllers\AttendanceCsvUploadController::class, 'store'])
@@ -57,6 +80,10 @@ Route::patch('/overtime-requests/{id}/reject', [\App\Http\Controllers\OvertimeRe
     ->middleware(['auth', 'verified'])
     ->name('overtime-requests.reject');
 
+Route::get('/approvals', [\App\Http\Controllers\ApprovalsController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('approvals.index');
+
 Route::match(['get', 'post'], '/payroll', [\App\Http\Controllers\PayrollController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('payroll.index');
@@ -64,6 +91,9 @@ Route::match(['get', 'post'], '/payroll', [\App\Http\Controllers\PayrollControll
 Route::get('/employees', [\App\Http\Controllers\EmployeeManagementController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('employees.index');
+Route::get('/employees/{employee}/details', [\App\Http\Controllers\EmployeeManagementController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('employees.show');
 Route::get('/employees/{employee}', function () {
     return redirect()->route('employees.index');
 })->middleware(['auth', 'verified']);

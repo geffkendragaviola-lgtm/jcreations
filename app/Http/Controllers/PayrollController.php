@@ -15,7 +15,7 @@ class PayrollController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        if (!$user?->isAdmin()) {
+        if (!$user?->canManageBackoffice()) {
             abort(403);
         }
 
