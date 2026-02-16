@@ -5,17 +5,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class OvertimeRequest extends Model
+class LateRequest extends Model
 {
     protected $fillable = [
         'id',
         'employee_id',
         'date',
-        'hours',
-        'description',
-        'attachment_path',
-        'computed_minutes',
+        'type',
+        'minutes',
         'reason',
+        'attachment_path',
         'status',
         'approved_by',
     ];
@@ -25,8 +24,6 @@ class OvertimeRequest extends Model
 
     protected $casts = [
         'date' => 'date',
-        'hours' => 'decimal:2',
-        'computed_minutes' => 'int',
     ];
 
     public function employee(): BelongsTo

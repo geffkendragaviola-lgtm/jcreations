@@ -80,6 +80,19 @@ Route::patch('/overtime-requests/{id}/reject', [\App\Http\Controllers\OvertimeRe
     ->middleware(['auth', 'verified'])
     ->name('overtime-requests.reject');
 
+Route::get('/late-requests', [\App\Http\Controllers\LateRequestController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('late-requests.index');
+Route::post('/late-requests', [\App\Http\Controllers\LateRequestController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('late-requests.store');
+Route::patch('/late-requests/{id}/approve', [\App\Http\Controllers\LateRequestController::class, 'approve'])
+    ->middleware(['auth', 'verified'])
+    ->name('late-requests.approve');
+Route::patch('/late-requests/{id}/reject', [\App\Http\Controllers\LateRequestController::class, 'reject'])
+    ->middleware(['auth', 'verified'])
+    ->name('late-requests.reject');
+
 Route::get('/approvals', [\App\Http\Controllers\ApprovalsController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('approvals.index');

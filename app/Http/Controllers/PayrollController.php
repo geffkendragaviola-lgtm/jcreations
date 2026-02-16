@@ -6,6 +6,7 @@ use App\Models\AttendanceDailySummary;
 use App\Models\AttendanceImportBatch;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
+use App\Models\LateRequest;
 use App\Models\OvertimeRequest;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -90,15 +91,37 @@ class PayrollController extends Controller
                 ->get()
                 ->groupBy('employee_id');
 
+            $approvedLate = LateRequest::query()
+                ->where('status', 'approved')
+                ->whereDate('date', '>=', $start)
+                ->whereDate('date', '<=', $end)
+                ->get()
+                ->groupBy('employee_id');
+
             foreach ($employees as $emp) {
                 $dailyRate = (float) ($emp->daily_rate ?? 0);
                 $hourlyRate = $baseHoursPerDay > 0 ? ($dailyRate / $baseHoursPerDay) : 0;
 
                 $empDaily = $daily->get($emp->employee_code, collect());
 
-                $daysWorked = $empDaily->count();
-                $lateHours = round(((int) $empDaily->sum(fn ($d) => (int) $d->late_in_minutes + (int) $d->late_break_in_minutes)) / 60, 2);
-                $undertimeHours = round(((int) $empDaily->sum('undertime_break_out_minutes')) / 60, 2);
+                $daysWorked = $empDaily->where('status', '!=', 'ABSENT')->count();
+
+                $lateMinutes = (int) $empDaily->sum(fn ($d) => (int) $d->late_in_minutes + (int) $d->late_break_in_minutes);
+                $undertimeMinutes = (int) $empDaily->sum('undertime_break_out_minutes');
+
+                $waivedLateMinutes = (int) ($approvedLate->get($emp->id, collect())
+                    ->where('type', 'late')
+                    ->sum(fn ($r) => (int) ($r->minutes ?? 0)));
+
+                $waivedUndertimeMinutes = (int) ($approvedLate->get($emp->id, collect())
+                    ->where('type', 'undertime')
+                    ->sum(fn ($r) => (int) ($r->minutes ?? 0)));
+
+                $lateMinutes = max($lateMinutes - $waivedLateMinutes, 0);
+                $undertimeMinutes = max($undertimeMinutes - $waivedUndertimeMinutes, 0);
+
+                $lateHours = round($lateMinutes / 60, 2);
+                $undertimeHours = round($undertimeMinutes / 60, 2);
 
                 $otHours = round(((float) $approvedOt->get($emp->id, collect())->sum('hours')), 2);
 
@@ -209,7 +232,7 @@ class PayrollController extends Controller
         return [$start, $end];
     }
 
-    private function countApprovedLeaveDaysInRange($leaveRequests, string $start, string $end): int
+    private function countApprovedLeaveDaysInRange($leaveRequests, string $start, string $end): float
     {
         $startC = Carbon::parse($start)->startOfDay();
         $endC = Carbon::parse($end)->startOfDay();
@@ -226,9 +249,19 @@ class PayrollController extends Controller
             $from = $s->lt($startC) ? $startC : $s;
             $to = $e->gt($endC) ? $endC : $e;
 
+            if ($lr->day_type === 'half_day') {
+                $days += 0.5;
+                continue;
+            }
+
+            if ($lr->duration_days !== null && (float) $lr->duration_days > 0) {
+                $days += (float) $lr->duration_days;
+                continue;
+            }
+
             $days += $from->diffInDays($to) + 1;
         }
 
-        return $days;
+        return (float) $days;
     }
 }

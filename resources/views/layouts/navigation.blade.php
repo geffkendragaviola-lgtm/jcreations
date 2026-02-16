@@ -20,6 +20,18 @@
                         {{ __('Time Tracking') }}
                     </x-nav-link>
 
+                    <x-nav-link :href="route('leave-requests.index')" :active="request()->routeIs('leave-requests.*')">
+                        {{ __('Time Off') }}
+                    </x-nav-link>
+
+                    <x-nav-link :href="route('overtime-requests.index')" :active="request()->routeIs('overtime-requests.*')">
+                        {{ __('Overtime') }}
+                    </x-nav-link>
+
+                    <x-nav-link :href="route('late-requests.index')" :active="request()->routeIs('late-requests.*')">
+                        {{ __('Late / Undertime') }}
+                    </x-nav-link>
+
                     @if (auth()->user()?->canManageBackoffice())
                         <x-nav-link :href="route('payroll.index')" :active="request()->routeIs('payroll.*')">
                             {{ __('Payroll') }}
@@ -99,6 +111,18 @@
 
             <x-responsive-nav-link :href="route('time-tracking.index')" :active="request()->routeIs('time-tracking.*')">
                 {{ __('Time Tracking') }}
+            </x-responsive-nav-link>
+
+            <x-responsive-nav-link :href="route('leave-requests.index')" :active="request()->routeIs('leave-requests.*')">
+                {{ __('Time Off') }}
+            </x-responsive-nav-link>
+
+            <x-responsive-nav-link :href="route('overtime-requests.index')" :active="request()->routeIs('overtime-requests.*')">
+                {{ __('Overtime') }}
+            </x-responsive-nav-link>
+
+            <x-responsive-nav-link :href="route('late-requests.index')" :active="request()->routeIs('late-requests.*')">
+                {{ __('Late / Undertime') }}
             </x-responsive-nav-link>
 
             @if (auth()->user()?->canManageBackoffice())

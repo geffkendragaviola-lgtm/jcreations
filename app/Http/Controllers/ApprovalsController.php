@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\LeaveRequest;
+use App\Models\LateRequest;
 use App\Models\OvertimeRequest;
 use Illuminate\Http\Request;
 
@@ -27,9 +28,16 @@ class ApprovalsController extends Controller
             ->orderByDesc('id')
             ->paginate(20, ['*'], 'absence_page');
 
+        $pendingLate = LateRequest::query()
+            ->with(['employee', 'approver'])
+            ->where('status', 'pending')
+            ->orderByDesc('id')
+            ->paginate(20, ['*'], 'late_page');
+
         return view('approvals.index', [
             'pendingOvertime' => $pendingOvertime,
             'pendingAbsences' => $pendingAbsences,
+            'pendingLate' => $pendingLate,
         ]);
     }
 }

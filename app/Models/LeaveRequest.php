@@ -13,6 +13,10 @@ class LeaveRequest extends Model
         'leave_type',
         'start_date',
         'end_date',
+        'day_type',
+        'duration_days',
+        'description',
+        'attachment_path',
         'status',
         'approved_by',
     ];
@@ -23,6 +27,7 @@ class LeaveRequest extends Model
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'duration_days' => 'decimal:2',
     ];
 
     public function employee(): BelongsTo

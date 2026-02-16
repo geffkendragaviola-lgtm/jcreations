@@ -1,14 +1,14 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Overtime Requests') }}
+            {{ __('Late / Undertime Requests') }}
         </h2>
     </x-slot>
 
     <div class="py-6">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
             <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
-                <form method="GET" action="{{ route('overtime-requests.index') }}" class="flex gap-2 items-end">
+                <form method="GET" action="{{ route('late-requests.index') }}" class="flex gap-2 items-end">
                     <div>
                         <x-input-label for="status" :value="__('Status')" />
                         <select id="status" name="status" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
@@ -23,9 +23,9 @@
             </div>
 
             <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
-                <h3 class="text-lg font-medium text-gray-900">{{ __('File Overtime') }}</h3>
+                <h3 class="text-lg font-medium text-gray-900">{{ __('File Late / Undertime / Missed Logs') }}</h3>
 
-                <form method="POST" action="{{ route('overtime-requests.store') }}" class="mt-4 space-y-4" enctype="multipart/form-data">
+                <form method="POST" action="{{ route('late-requests.store') }}" class="mt-4 space-y-4" enctype="multipart/form-data">
                     @csrf
                     <div>
                         <x-input-label for="date" :value="__('Date')" />
@@ -33,9 +33,13 @@
                         <x-input-error class="mt-2" :messages="$errors->get('date')" />
                     </div>
                     <div>
-                        <x-input-label for="description" :value="__('Description')" />
-                        <x-text-input id="description" name="description" type="text" class="mt-1 block w-full" :value="old('description')" />
-                        <x-input-error class="mt-2" :messages="$errors->get('description')" />
+                        <x-input-label for="type" :value="__('Type')" />
+                        <select id="type" name="type" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full">
+                            <option value="late" {{ old('type') === 'late' ? 'selected' : '' }}>Late</option>
+                            <option value="undertime" {{ old('type') === 'undertime' ? 'selected' : '' }}>Undertime</option>
+                            <option value="missed_logs" {{ old('type') === 'missed_logs' ? 'selected' : '' }}>Missed Logs</option>
+                        </select>
+                        <x-input-error class="mt-2" :messages="$errors->get('type')" />
                     </div>
                     <div>
                         <x-input-label for="reason" :value="__('Reason')" />
@@ -59,8 +63,8 @@
                             <tr class="border-b">
                                 <th class="text-left py-2">Employee</th>
                                 <th class="text-left py-2">Date</th>
-                                <th class="text-left py-2">Hours</th>
-                                <th class="text-left py-2">Description</th>
+                                <th class="text-left py-2">Type</th>
+                                <th class="text-left py-2">Minutes</th>
                                 <th class="text-left py-2">Reason</th>
                                 <th class="text-left py-2">Image</th>
                                 <th class="text-left py-2">Status</th>
@@ -73,8 +77,8 @@
                                 <tr class="border-b">
                                     <td class="py-2">{{ $r->employee?->full_name }}</td>
                                     <td class="py-2">{{ optional($r->date)->format('Y-m-d') }}</td>
-                                    <td class="py-2">{{ $r->hours }}</td>
-                                    <td class="py-2">{{ $r->description }}</td>
+                                    <td class="py-2">{{ $r->type }}</td>
+                                    <td class="py-2">{{ $r->minutes }}</td>
                                     <td class="py-2">{{ $r->reason }}</td>
                                     <td class="py-2">
                                         @if ($r->attachment_path)
@@ -87,12 +91,12 @@
                                     <td class="py-2">{{ $r->approver?->full_name }}</td>
                                     <td class="py-2">
                                         @if (auth()->user()?->canManageBackoffice() && $r->status === 'pending')
-                                            <form method="POST" action="{{ route('overtime-requests.approve', $r->id) }}" class="inline">
+                                            <form method="POST" action="{{ route('late-requests.approve', $r->id) }}" class="inline">
                                                 @csrf
                                                 @method('patch')
                                                 <x-primary-button>{{ __('Approve') }}</x-primary-button>
                                             </form>
-                                            <form method="POST" action="{{ route('overtime-requests.reject', $r->id) }}" class="inline">
+                                            <form method="POST" action="{{ route('late-requests.reject', $r->id) }}" class="inline">
                                                 @csrf
                                                 @method('patch')
                                                 <x-danger-button>{{ __('Reject') }}</x-danger-button>
