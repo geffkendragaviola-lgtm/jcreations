@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\EmployeeScheduleOverride;
 use App\Models\LeaveRequest;
-use App\Models\AttendanceDailySummary;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
@@ -56,7 +57,7 @@ class LeaveRequestController extends Controller
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'day_type' => ['required', 'string', 'in:full_day,half_day'],
             'description' => ['nullable', 'string'],
-            'image' => ['nullable', 'image', 'max:5120'],
+            'attachment' => ['nullable', 'file', 'max:5120', 'mimes:jpg,jpeg,png,pdf,doc,docx,xls,xlsx'],
         ]);
 
         $leaveType = strtolower(trim((string) $validated['leave_type']));
@@ -73,33 +74,9 @@ class LeaveRequestController extends Controller
 
         $durationDays = $validated['day_type'] === 'half_day' ? 0.5 : (float) $days;
 
-        $startC = \Carbon\Carbon::parse($validated['start_date'])->startOfDay();
-        $endC = \Carbon\Carbon::parse($validated['end_date'])->startOfDay();
-        $rangeDates = [];
-        for ($d = $startC->copy(); $d->lte($endC); $d->addDay()) {
-            $rangeDates[] = $d->toDateString();
-        }
-
-        $daily = AttendanceDailySummary::query()
-            ->where('employee_code', $employee->employee_code)
-            ->whereDate('summary_date', '>=', $validated['start_date'])
-            ->whereDate('summary_date', '<=', $validated['end_date'])
-            ->get()
-            ->keyBy(fn ($r) => optional($r->summary_date)->format('Y-m-d'));
-
-        foreach ($rangeDates as $dateStr) {
-            $row = $daily->get($dateStr);
-            if (!$row) {
-                return Redirect::back()->withErrors(['start_date' => 'No time tracking summary found for one or more selected dates.'])->withInput();
-            }
-            if ((string) $row->status !== 'ABSENT') {
-                return Redirect::back()->withErrors(['start_date' => 'Selected dates must be marked ABSENT in time tracking logs.'])->withInput();
-            }
-        }
-
         $attachmentPath = null;
-        if ($request->hasFile('image')) {
-            $attachmentPath = $request->file('image')->store('approvals', 'public');
+        if ($request->hasFile('attachment')) {
+            $attachmentPath = $request->file('attachment')->store('approvals', 'public');
         }
 
         $nextId = ((int) LeaveRequest::query()->max('id')) + 1;
@@ -128,10 +105,46 @@ class LeaveRequestController extends Controller
             abort(403);
         }
 
+        $validated = $request->validate([
+            'admin_notes' => ['nullable', 'string'],
+        ]);
+
         $lr = LeaveRequest::query()->where('id', $id)->firstOrFail();
         $lr->status = 'approved';
         $lr->approved_by = optional($user->employee)->id;
+        $lr->admin_notes = $validated['admin_notes'] ?? null;
         $lr->save();
+
+        $employeeId = (int) $lr->employee_id;
+        $start = Carbon::parse($lr->start_date)->startOfDay();
+        $end = Carbon::parse($lr->end_date)->startOfDay();
+
+        for ($d = $start->copy(); $d->lte($end); $d->addDay()) {
+            $workDate = $d->toDateString();
+
+            $existing = EmployeeScheduleOverride::query()
+                ->where('employee_id', $employeeId)
+                ->whereDate('work_date', $workDate)
+                ->first();
+
+            if ($existing) {
+                $existing->is_working = false;
+                $existing->start_time = null;
+                $existing->end_time = null;
+                $existing->save();
+                continue;
+            }
+
+            $nextId = ((int) EmployeeScheduleOverride::query()->max('id')) + 1;
+            EmployeeScheduleOverride::query()->create([
+                'id' => $nextId,
+                'employee_id' => $employeeId,
+                'work_date' => $workDate,
+                'is_working' => false,
+                'start_time' => null,
+                'end_time' => null,
+            ]);
+        }
 
         return Redirect::back();
     }
@@ -143,9 +156,14 @@ class LeaveRequestController extends Controller
             abort(403);
         }
 
+        $validated = $request->validate([
+            'admin_notes' => ['nullable', 'string'],
+        ]);
+
         $lr = LeaveRequest::query()->where('id', $id)->firstOrFail();
         $lr->status = 'rejected';
         $lr->approved_by = optional($user->employee)->id;
+        $lr->admin_notes = $validated['admin_notes'] ?? null;
         $lr->save();
 
         return Redirect::back();

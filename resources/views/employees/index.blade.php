@@ -1,36 +1,121 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between gap-3">
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                {{ __('Employees') }}
-            </h2>
-
-            <form method="GET" action="{{ route('employees.index') }}" class="w-full max-w-3xl flex flex-col md:flex-row md:items-center gap-2">
-                <div class="w-full">
-                    <input name="search" type="text" value="{{ request('search') }}" placeholder="Search by code / first name / last name" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
-                </div>
-
-                <div class="w-full md:w-64">
-                    <select name="department_id" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full">
-                        <option value="">All Departments</option>
-                        @foreach ($departments as $d)
-                            <option value="{{ $d->id }}" @selected((string) request('department_id') === (string) $d->id)>{{ $d->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="flex items-center gap-2">
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Filter</button>
-                    <a href="{{ route('employees.index') }}" class="px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200">Reset</a>
-                </div>
-            </form>
-        </div>
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Employee') }}</h2>
     </x-slot>
 
-    <div class="py-12">
+    <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 text-gray-900">
+            <div class="flex flex-col lg:flex-row gap-6">
+                <aside class="w-full lg:w-64">
+                    <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+                        <div class="px-4 py-4 border-b bg-gray-50">
+                            <div class="text-sm font-semibold text-gray-900">Employee</div>
+                        </div>
+
+                        <nav class="p-2">
+                            @php
+                                $activeNav = $activeNav ?? 'employees.index';
+                                $navItems = [
+                                    [
+                                        'label' => 'Employee List',
+                                        'route' => 'employees.index',
+                                    ],
+                                    [
+                                        'label' => 'Users',
+                                        'route' => 'users.index',
+                                    ],
+                                    [
+                                        'label' => 'Incomplete Employment',
+                                        'route' => 'employees.incompleteEmployment',
+                                    ],
+                                    [
+                                        'label' => 'Incomplete Compensation',
+                                        'route' => 'employees.incompleteCompensation',
+                                    ],
+                                    [
+                                        'label' => 'Incomplete Profile',
+                                        'route' => 'employees.incompleteProfile',
+                                    ],
+                                    [
+                                        'label' => 'Incomplete Government Info',
+                                        'route' => 'employees.incompleteGovernmentInfo',
+                                    ],
+                                    [
+                                        'label' => 'Disciplinary Actions',
+                                        'route' => 'employees.disciplinaryActions',
+                                    ],
+                                    [
+                                        'label' => 'Employee Leave Credits',
+                                        'route' => null,
+                                    ],
+                                    [
+                                        'label' => 'Evaluation',
+                                        'route' => null,
+                                    ],
+                                ];
+                            @endphp
+
+                            @foreach ($navItems as $item)
+                                @php
+                                    $isActive = ($activeNav ?? '') === ($item['route'] ?? '');
+                                    $classes = $isActive ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-700 hover:bg-gray-50';
+                                @endphp
+
+                                @if (!empty($item['route']))
+                                    <a href="{{ route($item['route']) }}" class="block px-3 py-2 rounded-md text-sm {{ $classes }}">
+                                        {{ $item['label'] }}
+                                    </a>
+                                @else
+                                    <div class="px-3 py-2 rounded-md text-sm text-gray-400 cursor-not-allowed">
+                                        {{ $item['label'] }}
+                                    </div>
+                                @endif
+                            @endforeach
+                        </nav>
+                    </div>
+                </aside>
+
+                <main class="flex-1">
+                    <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+                        <div class="p-5 border-b">
+                            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div class="flex items-center gap-2">
+                                    <div class="text-lg font-semibold text-gray-900">{{ $pageTitle ?? 'Employee List' }}</div>
+                                </div>
+
+                                <div class="flex items-center gap-2">
+                                    <button type="button" class="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700">+ Add Employee</button>
+                                </div>
+                            </div>
+
+                            @php
+                                $listRoute = $activeNav ?? 'employees.index';
+                            @endphp
+
+                            <form method="GET" action="{{ route($listRoute) }}" class="mt-4 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                                <div class="md:col-span-6">
+                                    <div class="text-xs text-gray-600 mb-1">Search</div>
+                                    <input name="search" type="text" value="{{ request('search') }}" placeholder="Search by code / first name / last name" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
+                                </div>
+
+                                <div class="md:col-span-4">
+                                    <div class="text-xs text-gray-600 mb-1">Filter by Department</div>
+                                    <select name="department_id" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full">
+                                        <option value="">All Departments</option>
+                                        @foreach ($departments as $d)
+                                            <option value="{{ $d->id }}" @selected((string) request('department_id') === (string) $d->id)>{{ $d->name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="md:col-span-2 flex items-center gap-2">
+                                    <button type="submit" class="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Filter</button>
+                                    <a href="{{ route($listRoute) }}" class="w-full px-4 py-2 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 text-center">Reset</a>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="p-5 text-gray-900">
 
                     @if (session('status') === 'employee-updated')
                         <div class="mb-4 p-3 rounded bg-green-50 text-green-700 border border-green-200">
@@ -55,20 +140,18 @@
                         </div>
                     @endif
 
-                    <div class="overflow-x-auto">
+                    <div class="overflow-x-auto rounded-lg border border-gray-200">
                         <table class="min-w-full text-sm">
-                            <thead class="bg-gray-50">
+                            <thead class="bg-gray-50 text-gray-700">
                                 <tr class="border-b">
-                                    <th class="text-left py-3 px-2">Code</th>
-                                    <th class="text-left py-3 px-2">Name</th>
-                                    <th class="text-left py-3 px-2">Department</th>
-                                    <th class="text-left py-3 px-2">Job Position</th>
-                                    <th class="text-left py-3 px-2">Daily Rate</th>
-                                    <th class="text-left py-3 px-2">Total Deductions</th>
-                                    <th class="text-left py-3 px-2">Action</th>
+                                    <th class="text-left py-3 px-3 font-semibold">Employee Code</th>
+                                    <th class="text-left py-3 px-3 font-semibold">Name</th>
+                                    <th class="text-left py-3 px-3 font-semibold">Department</th>
+                                    <th class="text-left py-3 px-3 font-semibold">Status</th>
+                                    <th class="text-left py-3 px-3 font-semibold">Action</th>
                                 </tr>
                             </thead>
-                            <tbody id="employeesTableBody">
+                            <tbody id="employeesTableBody" class="divide-y">
                                 @foreach ($employees as $e)
                                     @php
                                         $totalDeductions = (float) ($e->sss_deduction ?? 0)
@@ -77,20 +160,28 @@
                                             + (float) ($e->cash_advance_deduction ?? 0);
                                     @endphp
 
-                                    <tr class="border-b">
-                                        <td class="py-3 px-2 font-medium">{{ $e->employee_code }}</td>
-                                        <td class="py-3 px-2">
-                                            <a href="{{ route('employees.show', $e) }}" class="text-indigo-700 hover:underline">
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="py-3 px-3">
+                                            <span class="inline-flex items-center px-3 py-1 rounded-md border border-dashed border-indigo-300 text-indigo-700 font-semibold bg-indigo-50">
+                                                {{ $e->employee_code }}
+                                            </span>
+                                        </td>
+                                        <td class="py-3 px-3">
+                                            <a href="{{ route('employees.show', $e) }}" class="text-gray-900 font-semibold hover:underline">
                                                 {{ $e->full_name }}
                                             </a>
+                                            <div class="text-xs text-gray-500">{{ $e->position ?? '-' }}</div>
                                         </td>
-                                        <td class="py-3 px-2">{{ $e->department?->name ?? '-' }}</td>
-                                        <td class="py-3 px-2">{{ $e->position ?? '-' }}</td>
-                                        <td class="py-3 px-2">{{ number_format((float) ($e->daily_rate ?? 0), 2) }}</td>
-                                        <td class="py-3 px-2">{{ number_format($totalDeductions, 2) }}</td>
-                                        <td class="py-3 px-2">
+                                        <td class="py-3 px-3 text-gray-700">{{ $e->department?->name ?? '-' }}</td>
+                                        <td class="py-3 px-3">
+                                            <div class="text-xs text-gray-500">Status:</div>
+                                            <div class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Active</div>
+                                            <div class="mt-1 text-xs text-gray-500">Total Deductions: {{ number_format($totalDeductions, 2) }}</div>
+                                        </td>
+                                        <td class="py-3 px-3">
                                             <div class="flex items-center gap-2">
-                                                <x-secondary-button x-data="" x-on:click.prevent="$dispatch('open-modal', 'edit-employee-{{ $e->id }}')">Edit</x-secondary-button>
+                                                <button type="button" class="w-9 h-9 rounded-md bg-indigo-600 text-white hover:bg-indigo-700" x-data x-on:click.prevent="$dispatch('open-modal', 'edit-employee-{{ $e->id }}')">✎</button>
+                                                <a href="{{ route('employees.show', $e) }}" class="w-9 h-9 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 inline-flex items-center justify-center">▦</a>
                                             </div>
 
                                             <x-modal name="edit-employee-{{ $e->id }}" :show="false" focusable>
@@ -355,7 +446,9 @@
                         {{ $employees->links() }}
                     </div>
 
-                </div>
+                        </div>
+                    </div>
+                </main>
             </div>
         </div>
     </div>

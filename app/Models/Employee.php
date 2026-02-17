@@ -9,6 +9,8 @@ use App\Models\EmployeeSchedule;
 use App\Models\EmployeeScheduleOverride;
 use App\Models\LeaveRequest;
 use App\Models\OvertimeRequest;
+use App\Models\CashAdvanceRequest;
+use App\Models\LoanRequest;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -108,6 +110,16 @@ class Employee extends Model
     public function overtimeRequests(): HasMany
     {
         return $this->hasMany(OvertimeRequest::class);
+    }
+
+    public function cashAdvanceRequests(): HasMany
+    {
+        return $this->hasMany(CashAdvanceRequest::class);
+    }
+
+    public function loanRequests(): HasMany
+    {
+        return $this->hasMany(LoanRequest::class);
     }
 
     public function schedules(): HasMany

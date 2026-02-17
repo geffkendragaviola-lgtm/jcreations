@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AttendanceDailySummary;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeSchedule;
 use App\Models\EmployeeScheduleOverride;
+use App\Models\LeaveRequest;
 use App\Models\OvertimeRequest;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -14,7 +16,7 @@ use Illuminate\Support\Facades\Redirect;
 
 class WorkScheduleController extends Controller
 {
-    private array $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    private array $days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
     public function index(Request $request)
     {
@@ -160,6 +162,45 @@ class WorkScheduleController extends Controller
 
         $otByDate = $approvedOt->groupBy(fn ($ot) => $ot->date?->format('Y-m-d'));
 
+        $approvedLeave = LeaveRequest::query()
+            ->where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $end->toDateString())
+            ->whereDate('end_date', '>=', $start->toDateString())
+            ->orderBy('start_date')
+            ->get();
+
+        $leaveDates = [];
+        foreach ($approvedLeave as $lr) {
+            if (!$lr->start_date || !$lr->end_date) {
+                continue;
+            }
+
+            $lrStart = Carbon::parse($lr->start_date)->startOfDay();
+            $lrEnd = Carbon::parse($lr->end_date)->startOfDay();
+            if ($lrStart->lt($start)) {
+                $lrStart = $start->copy();
+            }
+            if ($lrEnd->gt($end)) {
+                $lrEnd = $end->copy();
+            }
+
+            for ($d = $lrStart->copy(); $d->lte($lrEnd); $d->addDay()) {
+                $leaveDates[$d->format('Y-m-d')] = true;
+            }
+        }
+
+        $absentSummaries = AttendanceDailySummary::query()
+            ->where('employee_code', $employee->employee_code)
+            ->whereBetween('summary_date', [$start->toDateString(), $end->toDateString()])
+            ->where('status', 'ABSENT')
+            ->get();
+
+        $absentDates = $absentSummaries
+            ->filter(fn ($s) => $s->summary_date)
+            ->mapWithKeys(fn ($s) => [$s->summary_date->format('Y-m-d') => true])
+            ->all();
+
         $defaultStart = $employee->department?->business_hours_start;
         $defaultEnd = $employee->department?->business_hours_end;
 
@@ -215,6 +256,17 @@ class WorkScheduleController extends Controller
                 ->values()
                 ->all();
 
+            $labels = [];
+            if (!empty($otPills)) {
+                $labels[] = 'Overtime';
+            }
+            if (isset($leaveDates[$key])) {
+                $labels[] = 'On Leave';
+            }
+            if (isset($absentDates[$key])) {
+                $labels[] = 'On Absence';
+            }
+
             $days[] = [
                 'date' => $d->copy(),
                 'key' => $key,
@@ -225,6 +277,7 @@ class WorkScheduleController extends Controller
                 'start' => $effectiveStart,
                 'end' => $effectiveEnd,
                 'ot' => $otPills,
+                'labels' => $labels,
                 'baseline_working' => $baselineWorking,
                 'baseline_start' => $baselineStart,
                 'baseline_end' => $baselineEnd,

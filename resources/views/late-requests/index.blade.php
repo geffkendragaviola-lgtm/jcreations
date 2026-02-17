@@ -47,9 +47,9 @@
                         <x-input-error class="mt-2" :messages="$errors->get('reason')" />
                     </div>
                     <div>
-                        <x-input-label for="image" :value="__('Image (Optional)')" />
-                        <input id="image" name="image" type="file" accept="image/*" class="mt-1 block w-full" />
-                        <x-input-error class="mt-2" :messages="$errors->get('image')" />
+                        <x-input-label for="attachment" :value="__('Attachment (Optional)')" />
+                        <input id="attachment" name="attachment" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" class="mt-1 block w-full" />
+                        <x-input-error class="mt-2" :messages="$errors->get('attachment')" />
                     </div>
 
                     <x-primary-button>{{ __('Submit') }}</x-primary-button>

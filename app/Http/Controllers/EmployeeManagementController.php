@@ -9,6 +9,28 @@ use Illuminate\Support\Facades\DB;
 
 class EmployeeManagementController extends Controller
 {
+    private function buildEmployeesQuery(Request $request)
+    {
+        $search = trim((string) $request->query('search', ''));
+        $departmentId = $request->query('department_id');
+
+        return Employee::query()
+            ->with(['department', 'manager'])
+            ->when($departmentId !== null && $departmentId !== '', function ($query) use ($departmentId) {
+                $query->where('department_id', $departmentId);
+            })
+            ->when($search !== '', function ($query) use ($search) {
+                $term = mb_strtolower($search);
+                $like = '%' . $term . '%';
+
+                $query->where(function ($q) use ($like) {
+                    $q->whereRaw('LOWER(employee_code) LIKE ?', [$like])
+                        ->orWhereRaw('LOWER(first_name) LIKE ?', [$like])
+                        ->orWhereRaw('LOWER(last_name) LIKE ?', [$like]);
+                });
+            });
+    }
+
     private function redirectToEmployeesIndex(Request $request)
     {
         $redirectTo = $request->input('redirect_to');
@@ -34,21 +56,7 @@ class EmployeeManagementController extends Controller
             abort(403);
         }
 
-        $search = trim((string) $request->query('search', ''));
-        $departmentId = $request->query('department_id');
-
-        $employees = Employee::query()
-            ->with(['department', 'manager'])
-            ->when($departmentId !== null && $departmentId !== '', function ($query) use ($departmentId) {
-                $query->where('department_id', $departmentId);
-            })
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('employee_code', 'like', '%' . $search . '%')
-                        ->orWhere('first_name', 'like', '%' . $search . '%')
-                        ->orWhere('last_name', 'like', '%' . $search . '%');
-                });
-            })
+        $employees = $this->buildEmployeesQuery($request)
             ->orderBy('employee_code')
             ->paginate(25)
             ->withQueryString();
@@ -65,6 +73,161 @@ class EmployeeManagementController extends Controller
             'employees' => $employees,
             'departments' => $departments,
             'managers' => $managers,
+            'pageTitle' => 'Employee List',
+            'activeNav' => 'employees.index',
+        ]);
+    }
+
+    public function incompleteEmployment(Request $request)
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        $employees = $this->buildEmployeesQuery($request)
+            ->where(function ($q) {
+                $q->whereNull('department_id')
+                    ->orWhereNull('position')
+                    ->orWhere('position', '')
+                    ->orWhereNull('contract_start_date')
+                    ->orWhereNull('contract_type')
+                    ->orWhere('contract_type', '');
+            })
+            ->orderBy('employee_code')
+            ->paginate(25)
+            ->withQueryString();
+
+        $departments = Department::query()->orderBy('name')->get();
+        $managers = Employee::query()->orderBy('employee_code')->get();
+
+        return view('employees.index', [
+            'employees' => $employees,
+            'departments' => $departments,
+            'managers' => $managers,
+            'pageTitle' => 'Incomplete Employment',
+            'activeNav' => 'employees.incompleteEmployment',
+        ]);
+    }
+
+    public function incompleteCompensation(Request $request)
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        $employees = $this->buildEmployeesQuery($request)
+            ->where(function ($q) {
+                $q->whereNull('salary_structure_type')
+                    ->orWhere('salary_structure_type', '')
+                    ->orWhereNull('wage')
+                    ->orWhere('wage', 0)
+                    ->orWhereNull('hourly_rate_overtime');
+            })
+            ->orderBy('employee_code')
+            ->paginate(25)
+            ->withQueryString();
+
+        $departments = Department::query()->orderBy('name')->get();
+        $managers = Employee::query()->orderBy('employee_code')->get();
+
+        return view('employees.index', [
+            'employees' => $employees,
+            'departments' => $departments,
+            'managers' => $managers,
+            'pageTitle' => 'Incomplete Compensation',
+            'activeNav' => 'employees.incompleteCompensation',
+        ]);
+    }
+
+    public function incompleteProfile(Request $request)
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        $employees = $this->buildEmployeesQuery($request)
+            ->where(function ($q) {
+                $q->whereNull('email')
+                    ->orWhere('email', '')
+                    ->orWhereNull('phone')
+                    ->orWhere('phone', '')
+                    ->orWhereNull('bank_account_no')
+                    ->orWhere('bank_account_no', '');
+            })
+            ->orderBy('employee_code')
+            ->paginate(25)
+            ->withQueryString();
+
+        $departments = Department::query()->orderBy('name')->get();
+        $managers = Employee::query()->orderBy('employee_code')->get();
+
+        return view('employees.index', [
+            'employees' => $employees,
+            'departments' => $departments,
+            'managers' => $managers,
+            'pageTitle' => 'Incomplete Profile',
+            'activeNav' => 'employees.incompleteProfile',
+        ]);
+    }
+
+    public function incompleteGovernmentInfo(Request $request)
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        $employees = $this->buildEmployeesQuery($request)
+            ->where(function ($q) {
+                $q->whereNull('sss_no')
+                    ->orWhere('sss_no', '')
+                    ->orWhereNull('philhealth_no')
+                    ->orWhere('philhealth_no', '')
+                    ->orWhereNull('hdmf_no')
+                    ->orWhere('hdmf_no', '')
+                    ->orWhereNull('tax_id_no')
+                    ->orWhere('tax_id_no', '');
+            })
+            ->orderBy('employee_code')
+            ->paginate(25)
+            ->withQueryString();
+
+        $departments = Department::query()->orderBy('name')->get();
+        $managers = Employee::query()->orderBy('employee_code')->get();
+
+        return view('employees.index', [
+            'employees' => $employees,
+            'departments' => $departments,
+            'managers' => $managers,
+            'pageTitle' => 'Incomplete Government Info',
+            'activeNav' => 'employees.incompleteGovernmentInfo',
+        ]);
+    }
+
+    public function disciplinaryActions(Request $request)
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        $employees = $this->buildEmployeesQuery($request)
+            ->orderBy('employee_code')
+            ->paginate(25)
+            ->withQueryString();
+
+        $departments = Department::query()->orderBy('name')->get();
+        $managers = Employee::query()->orderBy('employee_code')->get();
+
+        return view('employees.index', [
+            'employees' => $employees,
+            'departments' => $departments,
+            'managers' => $managers,
+            'pageTitle' => 'Disciplinary Actions',
+            'activeNav' => 'employees.disciplinaryActions',
         ]);
     }
 

@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\AttendanceDailySummary;
+use App\Models\Employee;
+use App\Models\EmployeeScheduleOverride;
 use App\Models\OvertimeRequest;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
@@ -52,9 +55,10 @@ class OvertimeRequestController extends Controller
 
         $validated = $request->validate([
             'date' => ['required', 'date'],
+            'hours' => ['nullable', 'numeric', 'min:0.25'],
             'description' => ['nullable', 'string'],
             'reason' => ['nullable', 'string'],
-            'image' => ['nullable', 'image', 'max:5120'],
+            'attachment' => ['nullable', 'file', 'max:5120', 'mimes:jpg,jpeg,png,pdf,doc,docx,xls,xlsx'],
         ]);
 
         $daily = AttendanceDailySummary::query()
@@ -62,19 +66,27 @@ class OvertimeRequestController extends Controller
             ->whereDate('summary_date', $validated['date'])
             ->first();
 
-        if (!$daily) {
-            return Redirect::back()->withErrors(['date' => 'No time tracking summary found for the selected date.'])->withInput();
+        $computedMinutes = null;
+        $hours = null;
+        if ($daily) {
+            $computedMinutes = (int) $daily->ot_minutes;
+            $hours = round($computedMinutes / 60, 2);
+            if ($hours <= 0) {
+                $hours = null;
+            }
         }
 
-        $computedMinutes = (int) $daily->ot_minutes;
-        $computedHours = round($computedMinutes / 60, 2);
-        if ($computedHours <= 0) {
-            return Redirect::back()->withErrors(['date' => 'No overtime hours found in time logs for the selected date.'])->withInput();
+        if ($hours === null) {
+            $hours = isset($validated['hours']) ? (float) $validated['hours'] : null;
+        }
+
+        if ($hours === null || $hours <= 0) {
+            return Redirect::back()->withErrors(['hours' => 'Please enter OT hours.'])->withInput();
         }
 
         $attachmentPath = null;
-        if ($request->hasFile('image')) {
-            $attachmentPath = $request->file('image')->store('approvals', 'public');
+        if ($request->hasFile('attachment')) {
+            $attachmentPath = $request->file('attachment')->store('approvals', 'public');
         }
 
         $nextId = ((int) OvertimeRequest::query()->max('id')) + 1;
@@ -83,7 +95,7 @@ class OvertimeRequestController extends Controller
             'id' => $nextId,
             'employee_id' => $employee->id,
             'date' => $validated['date'],
-            'hours' => $computedHours,
+            'hours' => $hours,
             'description' => $validated['description'] ?? null,
             'attachment_path' => $attachmentPath,
             'computed_minutes' => $computedMinutes,
@@ -102,10 +114,69 @@ class OvertimeRequestController extends Controller
             abort(403);
         }
 
+        $validated = $request->validate([
+            'admin_notes' => ['nullable', 'string'],
+        ]);
+
         $ot = OvertimeRequest::query()->where('id', $id)->firstOrFail();
         $ot->status = 'approved';
         $ot->approved_by = optional($user->employee)->id;
+        $ot->admin_notes = $validated['admin_notes'] ?? null;
         $ot->save();
+
+        $employeeId = (int) $ot->employee_id;
+        $workDate = $ot->date ? Carbon::parse($ot->date)->toDateString() : null;
+        $hours = $ot->hours !== null ? (float) $ot->hours : 0.0;
+
+        if ($workDate && $hours > 0) {
+            $employee = Employee::query()->with(['department', 'schedules'])->where('id', $employeeId)->first();
+
+            $existing = EmployeeScheduleOverride::query()
+                ->where('employee_id', $employeeId)
+                ->whereDate('work_date', $workDate)
+                ->first();
+
+            $baselineStart = $employee?->department?->business_hours_start;
+            $baselineEnd = $employee?->department?->business_hours_end;
+
+            if ($employee) {
+                $dow = Carbon::parse($workDate)->format('l');
+                $weekly = $employee->schedules->firstWhere('day_of_week', $dow);
+                if ($weekly) {
+                    $baselineStart = $weekly->start_time;
+                    $baselineEnd = $weekly->end_time;
+                }
+            }
+
+            $startTime = $existing?->start_time ?? $baselineStart;
+            $endTime = $existing?->end_time ?? $baselineEnd;
+
+            $startTime = is_string($startTime) ? substr($startTime, 0, 5) : null;
+            $endTime = is_string($endTime) ? substr($endTime, 0, 5) : null;
+
+            if ($endTime !== null && preg_match('/^\d{2}:\d{2}$/', $endTime)) {
+                $base = Carbon::createFromFormat('Y-m-d H:i', $workDate . ' ' . $endTime);
+                $newEnd = $base->copy()->addMinutes((int) round($hours * 60));
+                $endTime = $newEnd->format('H:i');
+            }
+
+            if ($existing) {
+                $existing->is_working = true;
+                $existing->start_time = $startTime;
+                $existing->end_time = $endTime;
+                $existing->save();
+            } else {
+                $nextId = ((int) EmployeeScheduleOverride::query()->max('id')) + 1;
+                EmployeeScheduleOverride::query()->create([
+                    'id' => $nextId,
+                    'employee_id' => $employeeId,
+                    'work_date' => $workDate,
+                    'is_working' => true,
+                    'start_time' => $startTime,
+                    'end_time' => $endTime,
+                ]);
+            }
+        }
 
         return Redirect::back();
     }
@@ -117,9 +188,14 @@ class OvertimeRequestController extends Controller
             abort(403);
         }
 
+        $validated = $request->validate([
+            'admin_notes' => ['nullable', 'string'],
+        ]);
+
         $ot = OvertimeRequest::query()->where('id', $id)->firstOrFail();
         $ot->status = 'rejected';
         $ot->approved_by = optional($user->employee)->id;
+        $ot->admin_notes = $validated['admin_notes'] ?? null;
         $ot->save();
 
         return Redirect::back();

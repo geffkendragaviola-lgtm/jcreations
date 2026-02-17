@@ -54,7 +54,7 @@ class LateRequestController extends Controller
             'date' => ['required', 'date'],
             'type' => ['required', 'string', 'in:late,undertime,missed_logs'],
             'reason' => ['nullable', 'string'],
-            'image' => ['nullable', 'image', 'max:5120'],
+            'attachment' => ['nullable', 'file', 'max:5120', 'mimes:jpg,jpeg,png,pdf,doc,docx,xls,xlsx'],
         ]);
 
         $daily = AttendanceDailySummary::query()
@@ -84,8 +84,8 @@ class LateRequestController extends Controller
         }
 
         $attachmentPath = null;
-        if ($request->hasFile('image')) {
-            $attachmentPath = $request->file('image')->store('approvals', 'public');
+        if ($request->hasFile('attachment')) {
+            $attachmentPath = $request->file('attachment')->store('approvals', 'public');
         }
 
         $nextId = ((int) LateRequest::query()->max('id')) + 1;
@@ -112,9 +112,14 @@ class LateRequestController extends Controller
             abort(403);
         }
 
+        $validated = $request->validate([
+            'admin_notes' => ['nullable', 'string'],
+        ]);
+
         $lr = LateRequest::query()->where('id', $id)->firstOrFail();
         $lr->status = 'approved';
         $lr->approved_by = optional($user->employee)->id;
+        $lr->admin_notes = $validated['admin_notes'] ?? null;
         $lr->save();
 
         return Redirect::back();
@@ -127,9 +132,14 @@ class LateRequestController extends Controller
             abort(403);
         }
 
+        $validated = $request->validate([
+            'admin_notes' => ['nullable', 'string'],
+        ]);
+
         $lr = LateRequest::query()->where('id', $id)->firstOrFail();
         $lr->status = 'rejected';
         $lr->approved_by = optional($user->employee)->id;
+        $lr->admin_notes = $validated['admin_notes'] ?? null;
         $lr->save();
 
         return Redirect::back();

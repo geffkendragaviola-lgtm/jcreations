@@ -20,16 +20,8 @@
                         {{ __('Time Tracking') }}
                     </x-nav-link>
 
-                    <x-nav-link :href="route('leave-requests.index')" :active="request()->routeIs('leave-requests.*')">
-                        {{ __('Time Off') }}
-                    </x-nav-link>
-
-                    <x-nav-link :href="route('overtime-requests.index')" :active="request()->routeIs('overtime-requests.*')">
-                        {{ __('Overtime') }}
-                    </x-nav-link>
-
-                    <x-nav-link :href="route('late-requests.index')" :active="request()->routeIs('late-requests.*')">
-                        {{ __('Late / Undertime') }}
+                    <x-nav-link :href="route('requests.index')" :active="request()->routeIs('requests.*')">
+                        {{ __('Requests') }}
                     </x-nav-link>
 
                     @if (auth()->user()?->canManageBackoffice())
@@ -37,12 +29,12 @@
                             {{ __('Payroll') }}
                         </x-nav-link>
 
-                        <x-nav-link :href="route('approvals.index')" :active="request()->routeIs('approvals.*')">
-                            {{ __('Approvals') }}
-                        </x-nav-link>
-
                         <x-nav-link :href="route('employees.index')" :active="request()->routeIs('employees.*')">
                             {{ __('Employees') }}
+                        </x-nav-link>
+
+                        <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
+                            {{ __('Users') }}
                         </x-nav-link>
 
                         <x-nav-link :href="route('work-schedules.index')" :active="request()->routeIs('work-schedules.*')">
@@ -113,16 +105,8 @@
                 {{ __('Time Tracking') }}
             </x-responsive-nav-link>
 
-            <x-responsive-nav-link :href="route('leave-requests.index')" :active="request()->routeIs('leave-requests.*')">
-                {{ __('Time Off') }}
-            </x-responsive-nav-link>
-
-            <x-responsive-nav-link :href="route('overtime-requests.index')" :active="request()->routeIs('overtime-requests.*')">
-                {{ __('Overtime') }}
-            </x-responsive-nav-link>
-
-            <x-responsive-nav-link :href="route('late-requests.index')" :active="request()->routeIs('late-requests.*')">
-                {{ __('Late / Undertime') }}
+            <x-responsive-nav-link :href="route('requests.index')" :active="request()->routeIs('requests.*')">
+                {{ __('Requests') }}
             </x-responsive-nav-link>
 
             @if (auth()->user()?->canManageBackoffice())
@@ -130,12 +114,12 @@
                     {{ __('Payroll') }}
                 </x-responsive-nav-link>
 
-                <x-responsive-nav-link :href="route('approvals.index')" :active="request()->routeIs('approvals.*')">
-                    {{ __('Approvals') }}
-                </x-responsive-nav-link>
-
                 <x-responsive-nav-link :href="route('employees.index')" :active="request()->routeIs('employees.*')">
                     {{ __('Employees') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
+                    {{ __('Users') }}
                 </x-responsive-nav-link>
 
                 <x-responsive-nav-link :href="route('work-schedules.index')" :active="request()->routeIs('work-schedules.*')">

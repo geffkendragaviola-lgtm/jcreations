@@ -5,29 +5,26 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class OvertimeRequest extends Model
+class LoanRequest extends Model
 {
     protected $fillable = [
         'id',
         'employee_id',
-        'date',
-        'hours',
-        'description',
-        'attachment_path',
-        'computed_minutes',
-        'reason',
+        'amount',
+        'term_months',
+        'purpose',
         'status',
         'approved_by',
         'admin_notes',
+        'attachment_path',
     ];
 
     public $incrementing = false;
     protected $keyType = 'int';
 
     protected $casts = [
-        'date' => 'date',
-        'hours' => 'decimal:2',
-        'computed_minutes' => 'int',
+        'amount' => 'decimal:2',
+        'term_months' => 'int',
     ];
 
     public function employee(): BelongsTo

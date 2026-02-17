@@ -8,35 +8,85 @@
             $deptEnd = $employee->department?->business_hours_end ?? '17:00';
         @endphp
 
-        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div class="flex flex-col">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                    {{ __('Schedule Calendar') }}
-                </h2>
-                <div class="text-sm text-gray-600">
-                    {{ $employee->employee_code }} - {{ $employee->full_name }}
-                    @if ($employee->department)
-                        <span class="text-gray-400">|</span> {{ $employee->department->name }}
-                    @endif
-                </div>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-2">
-                <a href="{{ route('work-schedules.index') }}" class="px-4 py-2 bg-white border border-gray-200 text-gray-800 rounded hover:bg-gray-50">Back</a>
-                <div class="w-px h-6 bg-gray-200"></div>
-                <a href="{{ route('work-schedules.calendar', [$employee, 'month' => $prev]) }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-800 rounded hover:bg-gray-50">&larr;</a>
-                <div class="px-3 py-2 text-sm font-medium text-gray-800">
-                    {{ $month->format('F Y') }}
-                </div>
-                <a href="{{ route('work-schedules.calendar', [$employee, 'month' => $next]) }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-800 rounded hover:bg-gray-50">&rarr;</a>
-            </div>
-        </div>
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Schedule') }}</h2>
     </x-slot>
 
     <div class="py-8">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 text-gray-900">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="flex flex-col lg:flex-row gap-6">
+                <aside class="w-full lg:w-64">
+                    <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+                        <div class="px-4 py-4 border-b bg-gray-50">
+                            <div class="text-sm font-semibold text-gray-900">Schedule</div>
+                        </div>
+
+                        <nav class="p-2">
+                            @php
+                                $navItems = [
+                                    [
+                                        'label' => 'Schedule List',
+                                        'route' => 'work-schedules.index',
+                                    ],
+                                    [
+                                        'label' => 'Calendar',
+                                        'route' => 'work-schedules.calendar',
+                                    ],
+                                    [
+                                        'label' => 'Add Schedule',
+                                        'route' => null,
+                                    ],
+                                    [
+                                        'label' => 'Set Employee Schedule Type',
+                                        'route' => null,
+                                    ],
+                                ];
+                            @endphp
+
+                            @foreach ($navItems as $item)
+                                @if (($item['route'] ?? null) === 'work-schedules.calendar')
+                                    <div class="px-3 py-2 rounded-md text-sm bg-indigo-50 text-indigo-700 font-semibold">{{ $item['label'] }}</div>
+                                @elseif (!empty($item['route']))
+                                    <a href="{{ route($item['route']) }}" class="block px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-50">
+                                        {{ $item['label'] }}
+                                    </a>
+                                @else
+                                    <div class="px-3 py-2 rounded-md text-sm text-gray-400 cursor-not-allowed">
+                                        {{ $item['label'] }}
+                                    </div>
+                                @endif
+                            @endforeach
+                        </nav>
+                    </div>
+                </aside>
+
+                <main class="flex-1">
+                    <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+                        <div class="p-5 border-b">
+                            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <div class="text-sm text-gray-500">Schedule</div>
+                                    <div class="text-lg font-semibold text-gray-900">Schedule Calendar</div>
+                                    <div class="text-sm text-gray-600">
+                                        {{ $employee->employee_code }} - {{ $employee->full_name }}
+                                        @if ($employee->department)
+                                            <span class="text-gray-400">|</span> {{ $employee->department->name }}
+                                        @endif
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <a href="{{ route('work-schedules.index') }}" class="px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200">Back</a>
+                                    <div class="w-px h-6 bg-gray-200"></div>
+                                    <a href="{{ route('work-schedules.calendar', [$employee, 'month' => $prev]) }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-800 rounded hover:bg-gray-50">&larr;</a>
+                                    <div class="px-3 py-2 text-sm font-medium text-gray-800">
+                                        {{ $month->format('F Y') }}
+                                    </div>
+                                    <a href="{{ route('work-schedules.calendar', [$employee, 'month' => $next]) }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-800 rounded hover:bg-gray-50">&rarr;</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-5 text-gray-900">
 
                     @if (session('status') === 'schedule-override-updated')
                         <div class="mb-4 p-3 rounded bg-green-50 text-green-700 border border-green-200">
@@ -99,6 +149,27 @@
                                     </div>
 
                                     <div class="flex-1">
+                                        @if (!empty($d['labels']))
+                                            <div class="flex flex-wrap gap-1 mb-1">
+                                                @foreach ($d['labels'] as $lbl)
+                                                    @php
+                                                        $lbl = (string) $lbl;
+                                                        $lblClass = 'bg-gray-100 text-gray-700';
+                                                        if ($lbl === 'Overtime') {
+                                                            $lblClass = 'bg-amber-100 text-amber-900';
+                                                        } elseif ($lbl === 'On Leave') {
+                                                            $lblClass = 'bg-emerald-100 text-emerald-800';
+                                                        } elseif ($lbl === 'On Absence') {
+                                                            $lblClass = 'bg-red-100 text-red-800';
+                                                        }
+                                                    @endphp
+                                                    <div class="text-[10px] font-semibold px-2 py-0.5 rounded-full {{ $lblClass }}">
+                                                        {{ $lbl }}
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @endif
+
                                         @if ($d['working'] && $d['start'] && $d['end'])
                                             <div class="inline-flex items-center max-w-full">
                                                 <div class="truncate text-xs font-semibold text-indigo-800 bg-indigo-100 px-2 py-1 rounded-md">
@@ -239,7 +310,9 @@
                         </div>
                     </div>
 
-                </div>
+                        </div>
+                    </div>
+                </main>
             </div>
         </div>
     </div>

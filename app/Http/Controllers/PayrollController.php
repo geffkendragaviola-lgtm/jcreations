@@ -10,6 +10,7 @@ use App\Models\LateRequest;
 use App\Models\OvertimeRequest;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class PayrollController extends Controller
 {
@@ -61,9 +62,12 @@ class PayrollController extends Controller
         $rows = [];
 
         if ($start && $end) {
-            $employees = Employee::query()->with('department')->orderBy('employee_code')->get();
             $employees = Employee::query()
-                ->with('department')
+                ->with([
+                    'department',
+                    'schedules',
+                    'scheduleOverrides' => fn ($q) => $q->whereDate('work_date', '>=', $start)->whereDate('work_date', '<=', $end),
+                ])
                 ->whereHas('roles', function ($q) {
                     $q->where('name', 'employee');
                 })
@@ -98,13 +102,135 @@ class PayrollController extends Controller
                 ->get()
                 ->groupBy('employee_id');
 
+            $startC = Carbon::parse($start)->startOfDay();
+            $endC = Carbon::parse($end)->startOfDay();
+
+            $buildExpectedWorkingDates = function (Employee $emp) use ($startC, $endC) {
+                $weekly = $emp->schedules->keyBy('day_of_week');
+                $hasWeekly = $weekly->count() > 0;
+
+                $overrideMap = $emp->scheduleOverrides
+                    ->filter(fn ($o) => $o->work_date)
+                    ->keyBy(fn ($o) => $o->work_date->format('Y-m-d'));
+
+                $expected = [];
+                for ($d = $startC->copy(); $d->lte($endC); $d->addDay()) {
+                    $key = $d->format('Y-m-d');
+                    $dow = $d->format('l');
+
+                    $isWorking = false;
+                    if ($hasWeekly) {
+                        $isWorking = $weekly->has($dow);
+                    } else {
+                        $isWorking = !$d->isSaturday() && !$d->isSunday();
+                    }
+
+                    $override = $overrideMap->get($key);
+                    if ($override) {
+                        $isWorking = (bool) $override->is_working;
+                    }
+
+                    if ($isWorking) {
+                        $expected[$key] = true;
+                    }
+                }
+
+                return $expected;
+            };
+
+            $buildLeaveDates = function ($leaveRequests) use ($startC, $endC) {
+                $leaveByDate = [];
+
+                foreach ($leaveRequests as $lr) {
+                    if (!$lr->start_date || !$lr->end_date) {
+                        continue;
+                    }
+
+                    $from = Carbon::parse($lr->start_date)->startOfDay();
+                    $to = Carbon::parse($lr->end_date)->startOfDay();
+
+                    if ($to->lt($startC) || $from->gt($endC)) {
+                        continue;
+                    }
+
+                    if ($from->lt($startC)) {
+                        $from = $startC->copy();
+                    }
+                    if ($to->gt($endC)) {
+                        $to = $endC->copy();
+                    }
+
+                    for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
+                        $key = $d->format('Y-m-d');
+                        $leaveByDate[$key] = [
+                            'leave_type' => (string) ($lr->leave_type ?? ''),
+                            'day_type' => (string) ($lr->day_type ?? 'full_day'),
+                        ];
+                    }
+                }
+
+                return $leaveByDate;
+            };
+
             foreach ($employees as $emp) {
                 $dailyRate = (float) ($emp->daily_rate ?? 0);
                 $hourlyRate = $baseHoursPerDay > 0 ? ($dailyRate / $baseHoursPerDay) : 0;
 
                 $empDaily = $daily->get($emp->employee_code, collect());
 
-                $daysWorked = $empDaily->where('status', '!=', 'ABSENT')->count();
+                $expectedWorking = $buildExpectedWorkingDates($emp);
+
+                $leaveByDate = $buildLeaveDates($approvedLeave->get($emp->id, collect()));
+
+                $paidLeaveDays = 0.0;
+                $unpaidLeaveDays = 0.0;
+                foreach ($leaveByDate as $meta) {
+                    $duration = (string) ($meta['day_type'] ?? 'full_day') === 'half_day' ? 0.5 : 1.0;
+                    $leaveType = Str::lower(trim((string) ($meta['leave_type'] ?? '')));
+                    if ($leaveType !== '' && Str::contains($leaveType, 'without pay')) {
+                        $unpaidLeaveDays += $duration;
+                    } else {
+                        $paidLeaveDays += $duration;
+                    }
+                }
+
+                $summariesByDate = $empDaily
+                    ->filter(fn ($d) => $d && $d->summary_date)
+                    ->keyBy(fn ($d) => $d->summary_date->format('Y-m-d'));
+
+                $regularWorkedDays = 0;
+                $restDayWorkedDays = 0;
+                $unpaidAbsenceDays = 0;
+
+                for ($d = $startC->copy(); $d->lte($endC); $d->addDay()) {
+                    $dateKey = $d->format('Y-m-d');
+                    $isExpected = isset($expectedWorking[$dateKey]);
+
+                    if (isset($leaveByDate[$dateKey])) {
+                        continue;
+                    }
+
+                    $summary = $summariesByDate->get($dateKey);
+                    $status = $summary ? (string) ($summary->status ?? '') : null;
+
+                    if ($isExpected) {
+                        if ($status === null) {
+                            $unpaidAbsenceDays += 1;
+                            continue;
+                        }
+                        if (strtoupper($status) !== 'ABSENT') {
+                            $regularWorkedDays += 1;
+                        } else {
+                            $unpaidAbsenceDays += 1;
+                        }
+                    } else {
+                        if ($status !== null && strtoupper((string) $status) !== 'ABSENT') {
+                            $restDayWorkedDays += 1;
+                        }
+                    }
+                }
+
+                $daysWorked = $regularWorkedDays + $restDayWorkedDays;
 
                 $lateMinutes = (int) $empDaily->sum(fn ($d) => (int) $d->late_in_minutes + (int) $d->late_break_in_minutes);
                 $undertimeMinutes = (int) $empDaily->sum('undertime_break_out_minutes');
@@ -125,12 +251,16 @@ class PayrollController extends Controller
 
                 $otHours = round(((float) $approvedOt->get($emp->id, collect())->sum('hours')), 2);
 
-                $absenceDays = $this->countApprovedLeaveDaysInRange($approvedLeave->get($emp->id, collect()), $start, $end);
+                $grossRegular = round($regularWorkedDays * $dailyRate, 2);
+                $grossPaidLeave = round($paidLeaveDays * $dailyRate, 2);
+                $grossRestDay = round($restDayWorkedDays * $dailyRate * 1.3, 2);
 
-                $gross = round($daysWorked * $dailyRate, 2);
+                $baseWorkingDaysForPeriod = $regularWorkedDays + $paidLeaveDays + $unpaidLeaveDays + $unpaidAbsenceDays;
+                $grossBase = round($baseWorkingDaysForPeriod * $dailyRate, 2);
+                $gross = round($grossBase + $grossRestDay, 2);
                 $lateDeduction = round($lateHours * $hourlyRate, 2);
                 $undertimeDeduction = round($undertimeHours * $hourlyRate, 2);
-                $absenceDeduction = round($absenceDays * $dailyRate, 2);
+                $absenceDeduction = round(($unpaidAbsenceDays + $unpaidLeaveDays) * $dailyRate, 2);
 
                 $otPay = round($otHours * $hourlyRate * $otMultiplier, 2);
 
@@ -159,10 +289,15 @@ class PayrollController extends Controller
                     'daily_rate' => $dailyRate,
                     'hourly_rate' => round($hourlyRate, 2),
                     'days_worked' => $daysWorked,
+                    'regular_worked_days' => $regularWorkedDays,
+                    'rest_day_worked_days' => $restDayWorkedDays,
+                    'paid_leave_days' => $paidLeaveDays,
+                    'unpaid_leave_days' => $unpaidLeaveDays,
+                    'unpaid_absence_days' => $unpaidAbsenceDays,
                     'late_hours' => $lateHours,
                     'undertime_hours' => $undertimeHours,
                     'approved_ot_hours' => $otHours,
-                    'approved_absence_days' => $absenceDays,
+                    'approved_absence_days' => $unpaidLeaveDays,
                     'gross_pay' => $gross,
                     'ot_pay' => $otPay,
                     'late_deduction' => $lateDeduction,

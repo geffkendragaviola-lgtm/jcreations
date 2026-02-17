@@ -1,8 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Employee Time Tracking System') }}
-        </h2>
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Time Tracking') }}</h2>
     </x-slot>
 
     @push('styles')
@@ -219,10 +217,27 @@
         </style>
     @endpush
 
-    <div class="py-6">
-        <div class="container-fluid py-4">
-            <div class="row mb-4">
-                <div class="col-12">
+    <div class="py-8">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="flex flex-col lg:flex-row gap-6">
+                <aside class="w-full lg:w-64">
+                    <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+                        <div class="px-4 py-4 border-b bg-gray-50">
+                            <div class="text-sm font-semibold text-gray-900">Attendance</div>
+                        </div>
+
+                        <nav class="p-2">
+                            <a href="{{ route('time-tracking.index') }}" class="block px-3 py-2 rounded-md text-sm bg-indigo-50 text-indigo-700 font-semibold">Time Tracking</a>
+                            <a href="{{ route('time-tracking.logs') }}" class="block px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-50">Logs</a>
+                            <a href="{{ route('work-schedules.index') }}" class="block px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-50">Schedule</a>
+                        </nav>
+                    </div>
+                </aside>
+
+                <main class="flex-1">
+                    <div class="container px-0 py-0">
+                        <div class="row">
+                            <div class="col-12">
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
                         <h1 class="h3 mb-0"><i class="bi bi-clock-history me-2"></i>Employee Time Tracking System</h1>
                         <div class="d-flex flex-wrap align-items-center gap-2">
@@ -260,10 +275,18 @@
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Loading...</span>
                 </div>
-                <p class="mt-2">Processing CSV data...</p>
+                <p class="mt-2">Processing time records...</p>
             </div>
 
-            <div id="summarySection" class="row mb-4">
+            <div id="restDayNote" class="alert alert-info" style="display: none;">
+                <div class="fw-semibold">Rest Day clarification</div>
+                <div class="small">
+                    A <span class="fw-semibold">Rest Day</span> is any date that is <span class="fw-semibold">not scheduled as a working day</span> for the employee based on Work Schedules (weekly schedule + overrides).
+                    If the employee has logs on a Rest Day, it is counted as <span class="fw-semibold">worked</span> and paid with a premium in Payroll.
+                </div>
+            </div>
+
+            <div id="summarySection" class="row mb-4" style="display: none;">
                 <div class="col-md-3 col-sm-6 mb-3">
                     <div class="card summary-card h-100">
                         <div class="card-body text-center">
@@ -356,6 +379,8 @@
                                                 <th>Total Undertime</th>
                                                 <th>Undertime Frequency</th>
                                                 <th>Most Frequent Late Time</th>
+                                                <th>Paid Leave</th>
+                                                <th>Unpaid Leave</th>
                                                 <th>Letter</th>
                                             </tr>
                                         </thead>
@@ -509,6 +534,15 @@
                         </div>
                     </div>
                 </div>
+
+            </div>
+
+                            </div>
+                        </div>
+                    </div>
+                        </div>
+                    </div>
+                </main>
             </div>
         </div>
     </div>
@@ -543,9 +577,11 @@
             const DEDUPE_WINDOW_MINUTES = 2; // punches within this many minutes = same punch (double-tap/lag); keep one only
 
             const DEPARTMENT_SCHEDULES = @json($departmentSchedules ?? []);
+            const VALID_EMPLOYEE_CODES = @json($validEmployeeCodes ?? []);
             let employeeData = [];
             let processedData = [];
-            let monthlySummary = [];
+            let monthlySummary = {};
+            let periodSummary = {};
             let selectedDepartment = 'ALL';
             let dailySearchQuery = '';
             let monthlySearchQuery = '';
@@ -854,26 +890,29 @@
                         };
                     });
 
-                    monthlySummary = {};
+                    periodSummary = {};
                     period.forEach(p => {
-                        monthlySummary[p.employee_code] = {
+                        periodSummary[p.employee_code] = {
                             employeeName: p.employee_name || 'Unknown',
                             department: p.department || '',
                             totalLateFrequency: Number(p.late_frequency || 0),
                             totalLateMinutes: Number(p.late_duration || 0),
                             totalUndertime: Number(p.total_undertime || 0),
                             totalUndertimeFrequency: Number(p.undertime_frequency || 0),
-                            missedLogDays: 0,
                             missedPunches: Number(p.missed_logs_count || 0),
-                            absentAMCount: 0,
-                            absentPMCount: 0,
-                            wholeDayAbsentCount: Number(p.absences || 0),
-                            halfDayCount: 0,
-                            lateTimes: []
+                            graceDays: Number(p.grace_days || 0),
+                            absences: Number(p.absences || 0),
+                            daysWorked: Number(p.days_worked || 0),
+                            leavePaidDays: Number(p.leave_paid_days || 0),
+                            leaveUnpaidDays: Number(p.leave_unpaid_days || 0),
+                            mostFrequentLateTime: p.most_frequent_late_time || null,
                         };
                     });
 
+                    monthlySummary = buildMonthlySummaryFromPeriodAndRecords(periodSummary, processedData);
+
                     updateDepartmentFilterOptions();
+                    showRestDayNote();
                     displayResults();
                 })
                 .catch((err) => {
@@ -942,31 +981,41 @@
                         };
                     });
 
-                    monthlySummary = {};
+                    periodSummary = {};
                     period.forEach(p => {
-                        monthlySummary[p.employee_code] = {
+                        periodSummary[p.employee_code] = {
                             employeeName: p.employee_name || 'Unknown',
                             department: p.department || '',
                             totalLateFrequency: Number(p.late_frequency || 0),
                             totalLateMinutes: Number(p.late_duration || 0),
                             totalUndertime: Number(p.total_undertime || 0),
                             totalUndertimeFrequency: Number(p.undertime_frequency || 0),
-                            missedLogDays: 0,
                             missedPunches: Number(p.missed_logs_count || 0),
-                            absentAMCount: 0,
-                            absentPMCount: 0,
-                            wholeDayAbsentCount: Number(p.absences || 0),
-                            halfDayCount: 0,
-                            lateTimes: []
+                            graceDays: Number(p.grace_days || 0),
+                            absences: Number(p.absences || 0),
+                            daysWorked: Number(p.days_worked || 0),
+                            leavePaidDays: Number(p.leave_paid_days || 0),
+                            leaveUnpaidDays: Number(p.leave_unpaid_days || 0),
+                            mostFrequentLateTime: p.most_frequent_late_time || null,
                         };
                     });
 
+                    monthlySummary = buildMonthlySummaryFromPeriodAndRecords(periodSummary, processedData);
+
                     updateDepartmentFilterOptions();
+                    showRestDayNote();
                     displayResults();
                 })
                 .catch(() => {
                     // ignore
                 });
+            }
+
+            function showRestDayNote() {
+                const el = document.getElementById('restDayNote');
+                if (el) {
+                    el.style.display = 'block';
+                }
             }
 
             const savedBatchSelect = document.getElementById('savedBatchSelect');
@@ -1101,6 +1150,8 @@
 
                 const useHeader = idx.employeeId >= 0 && idx.department >= 0 && idx.employeeName >= 0 && idx.time >= 0 && idx.date >= 0 && idx.activity >= 0;
 
+                const validSet = new Set((VALID_EMPLOYEE_CODES || []).map(c => String(c || '').trim()).filter(Boolean));
+
                 for (let i = 1; i < lines.length; i++) {
                     const cells = parseCSVLine(lines[i], regex);
                     if (!cells || cells.length < 6) continue;
@@ -1123,6 +1174,12 @@
                         activity: normalizeActivity(activityVal),
                         remarks: ((useHeader && idx.remarks >= 0 ? cells[idx.remarks] : cells[6]) || '').trim()
                     };
+
+                    const empCode = String(record.employeeId || '').trim();
+                    if (validSet.size > 0 && (!empCode || !validSet.has(empCode))) {
+                        continue;
+                    }
+
                     employeeData.push(record);
                 }
 
@@ -1572,7 +1629,7 @@
                     .sort(([, a], [, b]) => a.employeeName.localeCompare(b.employeeName, undefined, { sensitivity: 'base' }));
                 if (monthlyRows.length === 0) {
                     const emptyRow = document.createElement('tr');
-                    emptyRow.innerHTML = `<td colspan="13" class="text-muted fst-italic">No data yet. Upload a CSV to view Monthly Summary.</td>`;
+                    emptyRow.innerHTML = `<td colspan="15" class="text-muted fst-italic">No data yet. Upload a CSV to view Monthly Summary.</td>`;
                     monthlyBody.appendChild(emptyRow);
                 }
                 for (const [empId, summary] of monthlyRows) {
@@ -1603,9 +1660,7 @@
                     const row = document.createElement('tr');
                     row.classList.add('clickable-row');
                     row.title = "Click to view this employee's daily time records";
-                    const halfUnits = (summary.absentAMCount || 0) + (summary.absentPMCount || 0) + (summary.halfDayCount || 0);
-                    const fullUnits = (summary.wholeDayAbsentCount || 0);
-                    const totalAbsences = fullUnits + (halfUnits / 2);
+                    const totalAbsences = Number(summary.absences || 0);
                     const absencesDisplay = Number.isInteger(totalAbsences) ? String(totalAbsences.toFixed(0)) : totalAbsences.toFixed(1);
                     const undertimeFrequency = summary.totalUndertimeFrequency || 0;
                     const eligibleLate = lateFrequency > 3 || summary.totalUndertimeFrequency > 3;
@@ -1644,6 +1699,8 @@
                         <td>${summary.totalUndertime} min</td>
                         <td><span class="fw-bold">${undertimeFrequency}</span></td>
                         <td>${mostFrequentLate}</td>
+                        <td><span class="fw-bold">${Number.isInteger(summary.leavePaidDays) ? String(summary.leavePaidDays.toFixed(0)) : summary.leavePaidDays.toFixed(1)}</span></td>
+                        <td><span class="fw-bold">${Number.isInteger(summary.leaveUnpaidDays) ? String(summary.leaveUnpaidDays.toFixed(0)) : summary.leaveUnpaidDays.toFixed(1)}</span></td>
                         <td>${letterCell}</td>
                     `;
                     row.addEventListener('click', (e) => {
@@ -1668,7 +1725,8 @@
             function getScopedProcessedData() {
                 let records = processedData;
                 if (selectedDepartment !== 'ALL') {
-                    records = records.filter(record => record.department === selectedDepartment);
+                    const selectedDeptNorm = normalizeDepartmentForSchedule(selectedDepartment);
+                    records = records.filter(record => normalizeDepartmentForSchedule(record.department) === selectedDeptNorm);
                 }
                 if (dateStart || dateEnd) {
                     records = records.filter(record => isWithinDateRange(record.date));
@@ -1695,7 +1753,88 @@
             }
 
             function getFilteredMonthlySummary() {
-                return buildMonthlySummaryFromRecords(getScopedProcessedData());
+                // Prefer schedule-aware monthly summary (API `period`) so employees with zero logs still appear.
+                // Fallback to legacy record-based aggregation when `periodSummary` isn't available (e.g. CSV-only flow).
+                const hasPeriod = periodSummary && Object.keys(periodSummary).length > 0;
+                if (!hasPeriod) {
+                    return buildMonthlySummaryFromRecords(getScopedProcessedData());
+                }
+
+                const scopedRecords = getScopedProcessedData();
+                const scoped = buildMonthlySummaryFromPeriodAndRecords(periodSummary, scopedRecords);
+
+                if (selectedDepartment === 'ALL') return scoped;
+
+                const selectedDeptNorm = normalizeDepartmentForSchedule(selectedDepartment);
+                const filtered = {};
+                for (const [empId, summary] of Object.entries(scoped || {})) {
+                    if (normalizeDepartmentForSchedule(summary.department) === selectedDeptNorm) {
+                        filtered[empId] = summary;
+                    }
+                }
+                return filtered;
+            }
+
+            function buildMonthlySummaryFromPeriodAndRecords(periodByEmployeeId, records) {
+                const summary = {};
+                const entries = Object.entries(periodByEmployeeId || {});
+                entries.forEach(([empId, p]) => {
+                    summary[empId] = {
+                        employeeName: p.employeeName || 'Unknown',
+                        department: p.department || '',
+                        totalLateFrequency: Number(p.totalLateFrequency || 0),
+                        totalLateMinutes: Number(p.totalLateMinutes || 0),
+                        totalUndertime: Number(p.totalUndertime || 0),
+                        totalUndertimeFrequency: Number(p.totalUndertimeFrequency || 0),
+                        missedLogDays: 0,
+                        missedPunches: Number(p.missedPunches || 0),
+                        graceDays: Number(p.graceDays || 0),
+                        absences: Number(p.absences || 0),
+                        daysWorked: Number(p.daysWorked || 0),
+                        leavePaidDays: Number(p.leavePaidDays || 0),
+                        leaveUnpaidDays: Number(p.leaveUnpaidDays || 0),
+                        lateTimes: [],
+                    };
+                });
+
+                // Enrich from daily records for letter + late time distribution + missed logs.
+                (records || []).forEach(r => {
+                    if (!summary[r.employeeId]) {
+                        summary[r.employeeId] = {
+                            employeeName: r.employeeName,
+                            department: r.department,
+                            totalLateFrequency: 0,
+                            totalLateMinutes: 0,
+                            totalUndertime: 0,
+                            totalUndertimeFrequency: 0,
+                            missedLogDays: 0,
+                            missedPunches: 0,
+                            graceDays: 0,
+                            absences: 0,
+                            daysWorked: 0,
+                            leavePaidDays: 0,
+                            leaveUnpaidDays: 0,
+                            lateTimes: [],
+                        };
+                    }
+
+                    const s = summary[r.employeeId];
+                    const missingPunches = [r.rawTimeIn, r.rawBreakOut, r.rawBreakIn, r.rawTimeOut].filter(v => !v).length;
+                    if (!r.isWholeDayAbsent && missingPunches > 0) {
+                        s.missedLogDays += 1;
+                    }
+
+                    if ((r.lateMinutes || 0) > 0 && r.rawTimeIn) {
+                        const m = timeToMinutes(r.rawTimeIn);
+                        if (m !== null) s.lateTimes.push(m);
+                    }
+                    if ((r.lateBreakInMinutes || 0) > 0 && r.rawBreakIn) {
+                        const m = timeToMinutes(r.rawBreakIn);
+                        if (m !== null) s.lateTimes.push(m);
+                    }
+                });
+
+                return summary;
             }
 
             function buildMonthlySummaryFromRecords(records) {

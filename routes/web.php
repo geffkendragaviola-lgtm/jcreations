@@ -22,6 +22,16 @@ Route::get('/time-tracking', function () {
         ->orderBy('name')
         ->get();
 
+    $validEmployeeCodes = \App\Models\Employee::query()
+        ->whereNotNull('employee_code')
+        ->where('employee_code', '!=', '')
+        ->pluck('employee_code')
+        ->map(fn ($c) => trim((string) $c))
+        ->filter(fn ($c) => $c !== '')
+        ->unique()
+        ->values()
+        ->all();
+
     $departmentSchedules = [];
     foreach ($departments as $dept) {
         $name = (string) ($dept->name ?? '');
@@ -35,6 +45,7 @@ Route::get('/time-tracking', function () {
 
     return view('time-tracking.index', [
         'departmentSchedules' => $departmentSchedules,
+        'validEmployeeCodes' => $validEmployeeCodes,
     ]);
 })->middleware(['auth', 'verified'])->name('time-tracking.index');
 
@@ -53,6 +64,14 @@ Route::get('/time-tracking/import-batches', [\App\Http\Controllers\AttendanceImp
 Route::get('/time-tracking/logs', [\App\Http\Controllers\AttendanceLogController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('time-tracking.logs');
+
+Route::get('/requests', [\App\Http\Controllers\RequestsController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('requests.index');
+
+Route::get('/users', [\App\Http\Controllers\UserManagementController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('users.index');
 
 Route::get('/leave-requests', [\App\Http\Controllers\LeaveRequestController::class, 'index'])
     ->middleware(['auth', 'verified'])
@@ -80,6 +99,26 @@ Route::patch('/overtime-requests/{id}/reject', [\App\Http\Controllers\OvertimeRe
     ->middleware(['auth', 'verified'])
     ->name('overtime-requests.reject');
 
+Route::post('/cash-advance-requests', [\App\Http\Controllers\CashAdvanceRequestController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('cash-advance-requests.store');
+Route::patch('/cash-advance-requests/{id}/approve', [\App\Http\Controllers\CashAdvanceRequestController::class, 'approve'])
+    ->middleware(['auth', 'verified'])
+    ->name('cash-advance-requests.approve');
+Route::patch('/cash-advance-requests/{id}/reject', [\App\Http\Controllers\CashAdvanceRequestController::class, 'reject'])
+    ->middleware(['auth', 'verified'])
+    ->name('cash-advance-requests.reject');
+
+Route::post('/loan-requests', [\App\Http\Controllers\LoanRequestController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('loan-requests.store');
+Route::patch('/loan-requests/{id}/approve', [\App\Http\Controllers\LoanRequestController::class, 'approve'])
+    ->middleware(['auth', 'verified'])
+    ->name('loan-requests.approve');
+Route::patch('/loan-requests/{id}/reject', [\App\Http\Controllers\LoanRequestController::class, 'reject'])
+    ->middleware(['auth', 'verified'])
+    ->name('loan-requests.reject');
+
 Route::get('/late-requests', [\App\Http\Controllers\LateRequestController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('late-requests.index');
@@ -93,9 +132,9 @@ Route::patch('/late-requests/{id}/reject', [\App\Http\Controllers\LateRequestCon
     ->middleware(['auth', 'verified'])
     ->name('late-requests.reject');
 
-Route::get('/approvals', [\App\Http\Controllers\ApprovalsController::class, 'index'])
-    ->middleware(['auth', 'verified'])
-    ->name('approvals.index');
+Route::get('/approvals', function () {
+    return redirect()->route('requests.index', ['status' => 'pending']);
+})->middleware(['auth', 'verified'])->name('approvals.index');
 
 Route::match(['get', 'post'], '/payroll', [\App\Http\Controllers\PayrollController::class, 'index'])
     ->middleware(['auth', 'verified'])
@@ -104,6 +143,27 @@ Route::match(['get', 'post'], '/payroll', [\App\Http\Controllers\PayrollControll
 Route::get('/employees', [\App\Http\Controllers\EmployeeManagementController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('employees.index');
+
+Route::get('/employees/incomplete-employment', [\App\Http\Controllers\EmployeeManagementController::class, 'incompleteEmployment'])
+    ->middleware(['auth', 'verified'])
+    ->name('employees.incompleteEmployment');
+
+Route::get('/employees/incomplete-compensation', [\App\Http\Controllers\EmployeeManagementController::class, 'incompleteCompensation'])
+    ->middleware(['auth', 'verified'])
+    ->name('employees.incompleteCompensation');
+
+Route::get('/employees/incomplete-profile', [\App\Http\Controllers\EmployeeManagementController::class, 'incompleteProfile'])
+    ->middleware(['auth', 'verified'])
+    ->name('employees.incompleteProfile');
+
+Route::get('/employees/incomplete-government-info', [\App\Http\Controllers\EmployeeManagementController::class, 'incompleteGovernmentInfo'])
+    ->middleware(['auth', 'verified'])
+    ->name('employees.incompleteGovernmentInfo');
+
+Route::get('/employees/disciplinary-actions', [\App\Http\Controllers\EmployeeManagementController::class, 'disciplinaryActions'])
+    ->middleware(['auth', 'verified'])
+    ->name('employees.disciplinaryActions');
+
 Route::get('/employees/{employee}/details', [\App\Http\Controllers\EmployeeManagementController::class, 'show'])
     ->middleware(['auth', 'verified'])
     ->name('employees.show');

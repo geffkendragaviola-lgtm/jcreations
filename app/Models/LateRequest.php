@@ -17,6 +17,7 @@ class LateRequest extends Model
         'attachment_path',
         'status',
         'approved_by',
+        'admin_notes',
     ];
 
     public $incrementing = false;
