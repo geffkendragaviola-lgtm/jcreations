@@ -5,10 +5,34 @@ namespace App\Http\Controllers;
 use App\Models\CashAdvanceRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 
 class CashAdvanceRequestController extends Controller
 {
+    public function show(Request $request, int $id)
+    {
+        $user = $request->user();
+        $employee = $user?->employee;
+
+        if (!$employee) {
+            abort(403);
+        }
+
+        $cashAdvance = CashAdvanceRequest::query()
+            ->with(['employee.department', 'approver', 'releaser'])
+            ->where('id', $id)
+            ->firstOrFail();
+
+        if (!$user->canManageBackoffice() && (int) $cashAdvance->employee_id !== (int) $employee->id) {
+            abort(403);
+        }
+
+        return view('cash-advance-requests.show', [
+            'cashAdvance' => $cashAdvance,
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $user = $request->user();
@@ -56,11 +80,14 @@ class CashAdvanceRequestController extends Controller
             'admin_notes' => ['nullable', 'string'],
         ]);
 
-        $r = CashAdvanceRequest::query()->where('id', $id)->firstOrFail();
-        $r->status = 'approved';
-        $r->approved_by = optional($user->employee)->id;
-        $r->admin_notes = $validated['admin_notes'] ?? null;
-        $r->save();
+        DB::transaction(function () use ($id, $user, $validated) {
+            $r = CashAdvanceRequest::query()->lockForUpdate()->where('id', $id)->firstOrFail();
+            $r->status = 'approved';
+            $r->approved_by = optional($user->employee)->id;
+            $r->approved_at = now();
+            $r->admin_notes = $validated['admin_notes'] ?? null;
+            $r->save();
+        });
 
         return Redirect::back();
     }
@@ -81,6 +108,36 @@ class CashAdvanceRequestController extends Controller
         $r->approved_by = optional($user->employee)->id;
         $r->admin_notes = $validated['admin_notes'] ?? null;
         $r->save();
+
+        return Redirect::back();
+    }
+
+    public function release(Request $request, int $id): RedirectResponse
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        DB::transaction(function () use ($id, $user) {
+            $r = CashAdvanceRequest::query()->lockForUpdate()->where('id', $id)->firstOrFail();
+            if ($r->status !== 'approved') {
+                abort(422, 'Cash advance must be approved before it can be released.');
+            }
+
+            if ($r->released_at) {
+                return;
+            }
+
+            if (!$r->approved_at) {
+                $r->approved_at = now();
+                $r->approved_by = $r->approved_by ?? optional($user->employee)->id;
+            }
+
+            $r->released_by = optional($user->employee)->id;
+            $r->released_at = now();
+            $r->save();
+        });
 
         return Redirect::back();
     }

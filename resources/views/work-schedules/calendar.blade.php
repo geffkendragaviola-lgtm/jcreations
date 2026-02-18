@@ -11,55 +11,16 @@
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Schedule') }}</h2>
     </x-slot>
 
+    <x-slot name="headerNav">
+        <nav class="flex gap-6 -mb-px overflow-x-auto">
+            <a href="{{ route('time-tracking.index') }}" class="inline-flex items-center px-1 py-3 border-b-2 text-sm font-medium {{ request()->routeIs('time-tracking.index') ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">Time Tracking</a>
+            <a href="{{ route('time-tracking.logs') }}" class="inline-flex items-center px-1 py-3 border-b-2 text-sm font-medium {{ request()->routeIs('time-tracking.logs') ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">Logs</a>
+            <a href="{{ route('work-schedules.index') }}" class="inline-flex items-center px-1 py-3 border-b-2 text-sm font-medium {{ request()->routeIs('work-schedules.*') ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">Schedule</a>
+        </nav>
+    </x-slot>
+
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="flex flex-col lg:flex-row gap-6">
-                <aside class="w-full lg:w-64">
-                    <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-                        <div class="px-4 py-4 border-b bg-gray-50">
-                            <div class="text-sm font-semibold text-gray-900">Schedule</div>
-                        </div>
-
-                        <nav class="p-2">
-                            @php
-                                $navItems = [
-                                    [
-                                        'label' => 'Schedule List',
-                                        'route' => 'work-schedules.index',
-                                    ],
-                                    [
-                                        'label' => 'Calendar',
-                                        'route' => 'work-schedules.calendar',
-                                    ],
-                                    [
-                                        'label' => 'Add Schedule',
-                                        'route' => null,
-                                    ],
-                                    [
-                                        'label' => 'Set Employee Schedule Type',
-                                        'route' => null,
-                                    ],
-                                ];
-                            @endphp
-
-                            @foreach ($navItems as $item)
-                                @if (($item['route'] ?? null) === 'work-schedules.calendar')
-                                    <div class="px-3 py-2 rounded-md text-sm bg-indigo-50 text-indigo-700 font-semibold">{{ $item['label'] }}</div>
-                                @elseif (!empty($item['route']))
-                                    <a href="{{ route($item['route']) }}" class="block px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-50">
-                                        {{ $item['label'] }}
-                                    </a>
-                                @else
-                                    <div class="px-3 py-2 rounded-md text-sm text-gray-400 cursor-not-allowed">
-                                        {{ $item['label'] }}
-                                    </div>
-                                @endif
-                            @endforeach
-                        </nav>
-                    </div>
-                </aside>
-
-                <main class="flex-1">
                     <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
                         <div class="p-5 border-b">
                             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -312,8 +273,6 @@
 
                         </div>
                     </div>
-                </main>
-            </div>
         </div>
     </div>
 </x-app-layout>

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Department;
 use App\Models\Employee;
+use App\Services\ActivityLogger;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -47,6 +49,55 @@ class EmployeeManagementController extends Controller
         }
 
         return redirect()->route('employees.index');
+    }
+
+    public function create(Request $request)
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        $departments = Department::query()->orderBy('name')->get();
+        $managers = Employee::query()->orderBy('employee_code')->get();
+
+        return view('employees.create', [
+            'departments' => $departments,
+            'managers' => $managers,
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        $data = $request->validate([
+            'employee_code' => ['required', 'string', 'max:20', 'unique:employees,employee_code'],
+            'first_name' => ['required', 'string', 'max:50'],
+            'middle_name' => ['nullable', 'string', 'max:50'],
+            'last_name' => ['required', 'string', 'max:50'],
+            'email' => ['nullable', 'email', 'max:100', 'unique:employees,email'],
+            'phone' => ['nullable', 'string', 'max:20'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'position' => ['nullable', 'string', 'max:100'],
+            'contract_type' => ['nullable', 'in:Permanent,Temporary,Seasonal,Full-Time,Part-Time,Rank and File,Executive'],
+            'contract_start_date' => ['nullable', 'date'],
+            'employment_status' => ['nullable', 'in:active,probation,resigned,terminated,on_leave'],
+        ]);
+
+        $nextId = ((int) Employee::query()->max('id')) + 1;
+
+        $employee = Employee::create(array_merge($data, [
+            'id' => $nextId,
+            'employment_status' => $data['employment_status'] ?? 'active',
+        ]));
+
+        ActivityLogger::log('created', 'Employee', $employee->id, "Created employee {$employee->full_name}");
+
+        return redirect()->route('employees.show', $employee)->with('status', 'employee-created');
     }
 
     public function index(Request $request)

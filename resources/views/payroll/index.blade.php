@@ -8,8 +8,17 @@
     <div class="py-6">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
             <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
-                <form method="POST" action="{{ route('payroll.index') }}" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                <form method="POST" action="{{ route('payroll.save') }}" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
                     @csrf
+
+                    <input type="hidden" name="name" value="" />
+                    <input type="hidden" name="period_start" value="{{ $start }}" />
+                    <input type="hidden" name="period_end" value="{{ $end }}" />
+                    <input type="hidden" name="mode" value="{{ $mode }}" />
+                    <input type="hidden" name="base_hours_per_day" value="{{ $base_hours_per_day }}" />
+                    <input type="hidden" name="ot_multiplier" value="{{ $ot_multiplier }}" />
+                    <input type="hidden" name="batch_uuid" value="{{ $batch_uuid }}" />
+                    <input type="hidden" name="rows" id="payroll-save-rows" value="" />
 
                     <div class="md:col-span-6">
                         <x-input-label for="batch_uuid" :value="__('Time Tracking Saved Import')" />
@@ -55,17 +64,20 @@
                     </div>
 
                     <div>
-                        <x-primary-button class="w-full">{{ __('Generate') }}</x-primary-button>
-                    </div>
-
-                    <div class="md:col-span-6">
-                        <label class="inline-flex items-center gap-2">
-                            <input type="checkbox" name="save_government_deduction" value="1" class="rounded border-gray-300">
-                            <span class="text-sm text-gray-700">Save cash advance default</span>
-                        </label>
+                        <x-primary-button class="w-full" type="submit" formaction="{{ route('payroll.index') }}" name="submit_action" value="generate">{{ __('Generate') }}</x-primary-button>
                     </div>
 
                     @if (count($rows))
+                        <div class="md:col-span-6 flex items-center justify-between gap-4">
+                            <div class="flex items-center gap-3">
+                                <x-primary-button type="submit" id="payroll-save-button" name="submit_action" value="save">Save Payroll Run</x-primary-button>
+                            </div>
+
+                            <div class="text-sm text-gray-600">
+                                Range: <span class="font-semibold">{{ $start ?? '-' }}</span> to <span class="font-semibold">{{ $end ?? '-' }}</span>
+                            </div>
+                        </div>
+
                         <div class="md:col-span-6 overflow-auto">
                             <table class="min-w-full text-sm">
                                 <thead>
@@ -81,6 +93,7 @@
                                         <th class="text-left py-2">Pag-IBIG</th>
                                         <th class="text-left py-2">PhilHealth</th>
                                         <th class="text-left py-2">Cash Adv</th>
+                                        <th class="text-left py-2">Loan</th>
                                         <th class="text-left py-2">Total Deductions</th>
                                         <th class="text-left py-2">Gross Pay</th>
                                         <th class="text-left py-2">Net Pay</th>
@@ -106,7 +119,10 @@
                                                 {{ number_format($r['philhealth_deduction'], 2) }}
                                             </td>
                                             <td class="py-2" style="min-width: 120px;">
-                                                <input type="number" step="0.01" name="cash_advance_deduction[{{ $r['employee_id'] }}]" value="{{ old('cash_advance_deduction.' . $r['employee_id'], $r['cash_advance_deduction']) }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" />
+                                                <input type="number" step="0.01" name="cash_advance_deduction[{{ $r['employee_id'] }}]" value="{{ old('cash_advance_deduction.' . $r['employee_id'], $r['cash_advance_deduction']) }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" data-employee-id="{{ $r['employee_id'] }}" />
+                                            </td>
+                                            <td class="py-2" style="min-width: 120px;">
+                                                {{ number_format($r['loan_deduction'] ?? 0, 2) }}
                                             </td>
                                             <td class="py-2">{{ number_format($r['fixed_deductions_total'], 2) }}</td>
                                             <td class="py-2">{{ number_format($r['gross_pay'], 2) }}</td>
@@ -168,6 +184,7 @@
                                                                 <div class="flex justify-between"><span>Pag-IBIG</span><span class="font-semibold">-{{ number_format($r['pagibig_deduction'], 2) }}</span></div>
                                                                 <div class="flex justify-between"><span>PhilHealth</span><span class="font-semibold">-{{ number_format($r['philhealth_deduction'], 2) }}</span></div>
                                                                 <div class="flex justify-between"><span>Cash Advance</span><span class="font-semibold">-{{ number_format($r['cash_advance_deduction'], 2) }}</span></div>
+                                                                <div class="flex justify-between"><span>Loan</span><span class="font-semibold">-{{ number_format($r['loan_deduction'] ?? 0, 2) }}</span></div>
                                                             </div>
                                                             <div class="text-sm text-gray-900 flex justify-between border-t pt-2">
                                                                 <span class="font-semibold">Total Fixed Deductions</span>
@@ -196,6 +213,81 @@
                     @endif
                 </form>
             </div>
+
+            <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
+                <div class="text-lg font-semibold text-gray-900">Saved Payroll Runs</div>
+
+                <div class="mt-4 overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead>
+                            <tr class="border-b">
+                                <th class="text-left py-2">Name</th>
+                                <th class="text-left py-2">Period</th>
+                                <th class="text-left py-2">Status</th>
+                                <th class="text-left py-2">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($savedRuns as $run)
+                                <tr class="border-b">
+                                    <td class="py-2">{{ $run->name }}</td>
+                                    <td class="py-2">{{ optional($run->period_start)->format('Y-m-d') }} to {{ optional($run->period_end)->format('Y-m-d') }}</td>
+                                    <td class="py-2">{{ $run->status }}</td>
+                                    <td class="py-2">
+                                        <a class="text-indigo-700 hover:underline" href="{{ route('payroll.show', $run) }}">View</a>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td class="py-3 text-gray-600" colspan="4">No saved payroll runs yet.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
+
+    @if (count($rows))
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                var saveBtn = document.getElementById('payroll-save-button');
+                if (!saveBtn) return;
+
+                saveBtn.addEventListener('click', function () {
+                    var rows = @json($rows);
+
+                    var cashAdvInputs = document.querySelectorAll('input[name^="cash_advance_deduction["]');
+                    cashAdvInputs.forEach(function (el) {
+                        var empId = el.getAttribute('data-employee-id');
+                        var val = parseFloat(el.value || '0');
+                        if (!empId) return;
+                        for (var i = 0; i < rows.length; i++) {
+                            if (String(rows[i].employee_id) === String(empId)) {
+                                rows[i].cash_advance_deduction = isNaN(val) ? 0 : val;
+
+                                var gov = (parseFloat(rows[i].sss_deduction || 0) || 0)
+                                    + (parseFloat(rows[i].pagibig_deduction || 0) || 0)
+                                    + (parseFloat(rows[i].philhealth_deduction || 0) || 0);
+                                var loan = parseFloat(rows[i].loan_deduction || 0) || 0;
+                                rows[i].fixed_deductions_total = +(gov + rows[i].cash_advance_deduction + loan).toFixed(2);
+
+                                var gross = parseFloat(rows[i].gross_pay || 0) || 0;
+                                var otPay = parseFloat(rows[i].ot_pay || 0) || 0;
+                                var lateDed = parseFloat(rows[i].late_deduction || 0) || 0;
+                                var undertimeDed = parseFloat(rows[i].undertime_deduction || 0) || 0;
+                                var absenceDed = parseFloat(rows[i].absence_deduction || 0) || 0;
+
+                                rows[i].net_pay = +(gross + otPay - lateDed - undertimeDed - absenceDed - rows[i].fixed_deductions_total).toFixed(2);
+                                break;
+                            }
+                        }
+                    });
+
+                    document.getElementById('payroll-save-rows').value = JSON.stringify(rows);
+                });
+            });
+        </script>
+    @endif
 </x-app-layout>

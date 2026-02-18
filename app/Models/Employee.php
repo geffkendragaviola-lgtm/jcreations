@@ -5,12 +5,16 @@ namespace App\Models;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendanceLog;
 use App\Models\Department;
+use App\Models\DisciplinaryAction;
 use App\Models\EmployeeSchedule;
 use App\Models\EmployeeScheduleOverride;
+use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
+use App\Models\LoanPayment;
 use App\Models\OvertimeRequest;
 use App\Models\CashAdvanceRequest;
 use App\Models\LoanRequest;
+use App\Models\PayrollItem;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -57,6 +61,7 @@ class Employee extends Model
         'contract_type',
         'salary_schedule_pay',
         'salary_structure',
+        'employment_status',
     ];
 
     public $incrementing = false;
@@ -75,6 +80,7 @@ class Employee extends Model
         'contract_start_date' => 'date',
         'contract_end_date' => 'date',
         'minimum_wage_earner' => 'boolean',
+        'employment_status' => 'string',
     ];
 
     public function user(): HasOne
@@ -140,6 +146,26 @@ class Employee extends Model
     public function dailySummaries(): HasMany
     {
         return $this->hasMany(AttendanceDailySummary::class, 'employee_code', 'employee_code');
+    }
+
+    public function disciplinaryActions(): HasMany
+    {
+        return $this->hasMany(DisciplinaryAction::class);
+    }
+
+    public function leaveBalances(): HasMany
+    {
+        return $this->hasMany(LeaveBalance::class);
+    }
+
+    public function loanPayments(): HasMany
+    {
+        return $this->hasMany(LoanPayment::class);
+    }
+
+    public function payrollItems(): HasMany
+    {
+        return $this->hasMany(PayrollItem::class);
     }
 
     public function getFullNameAttribute(): string

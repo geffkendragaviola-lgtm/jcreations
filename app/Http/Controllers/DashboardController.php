@@ -10,6 +10,27 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
+        $absenceValueForStatus = function ($status): float {
+            if ($status === null) {
+                return 0.0;
+            }
+
+            $s = strtolower(trim((string) $status));
+            if ($s === '') {
+                return 0.0;
+            }
+
+            if ($s === 'absent' || $s === 'whole day absent') {
+                return 1.0;
+            }
+
+            if (str_contains($s, 'absent am') || str_contains($s, 'absent pm') || str_contains($s, 'half day (incomplete')) {
+                return 0.5;
+            }
+
+            return 0.0;
+        };
+
         $today = now()->toDateString();
         $monthStart = now()->startOfMonth()->toDateString();
         $monthEnd = now()->endOfMonth()->toDateString();
@@ -18,30 +39,31 @@ class DashboardController extends Controller
             ->whereDate('summary_date', $today);
 
         $presentToday = (clone $todaySummaries)
-            ->whereIn('status', ['ON_TIME', 'LATE', 'UNDERTIME', 'MISSED_LOG'])
+            ->whereNotNull('status')
+            ->whereRaw('LOWER(status) NOT LIKE ?', ['%absent%'])
             ->count();
 
         $lateToday = (clone $todaySummaries)
-            ->where('status', 'LATE')
+            ->whereRaw('LOWER(status) LIKE ?', ['%late%'])
             ->count();
 
         $absentToday = (clone $todaySummaries)
-            ->where('status', 'ABSENT')
-            ->count();
+            ->get(['status'])
+            ->sum(fn ($r) => $absenceValueForStatus($r->status));
 
         $totalHoursToday = (float) (clone $todaySummaries)->sum('total_hours');
 
         $monthlyLates = AttendanceDailySummary::query()
             ->whereDate('summary_date', '>=', $monthStart)
             ->whereDate('summary_date', '<=', $monthEnd)
-            ->where('status', 'LATE')
+            ->whereRaw('LOWER(status) LIKE ?', ['%late%'])
             ->count();
 
         $monthlyAbsences = AttendanceDailySummary::query()
             ->whereDate('summary_date', '>=', $monthStart)
             ->whereDate('summary_date', '<=', $monthEnd)
-            ->where('status', 'ABSENT')
-            ->count();
+            ->get(['status'])
+            ->sum(fn ($r) => $absenceValueForStatus($r->status));
 
         $overtimeHours = (float) OvertimeRequest::query()
             ->whereDate('date', '>=', $monthStart)
@@ -52,13 +74,13 @@ class DashboardController extends Controller
         $onTimeDays = AttendanceDailySummary::query()
             ->whereDate('summary_date', '>=', $monthStart)
             ->whereDate('summary_date', '<=', $monthEnd)
-            ->where('status', 'ON_TIME')
+            ->where('status', 'Ontime')
             ->count();
 
         $totalWorkDays = AttendanceDailySummary::query()
             ->whereDate('summary_date', '>=', $monthStart)
             ->whereDate('summary_date', '<=', $monthEnd)
-            ->whereIn('status', ['ON_TIME', 'LATE', 'UNDERTIME', 'MISSED_LOG', 'ABSENT'])
+            ->whereNotNull('status')
             ->count();
 
         $onTimePercent = $totalWorkDays > 0

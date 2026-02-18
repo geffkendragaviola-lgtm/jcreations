@@ -5,11 +5,19 @@ namespace App\Http\Controllers;
 use App\Models\AttendanceDailySummary;
 use App\Models\AttendanceImportBatch;
 use App\Models\Employee;
+use App\Models\CashAdvanceRequest;
 use App\Models\LeaveRequest;
 use App\Models\LateRequest;
+use App\Models\LoanPayment;
+use App\Models\LoanRequest;
 use App\Models\OvertimeRequest;
+use App\Models\PayrollItem;
+use App\Models\PayrollRun;
+use App\Services\ActivityLogger;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class PayrollController extends Controller
@@ -62,6 +70,8 @@ class PayrollController extends Controller
         $rows = [];
 
         if ($start && $end) {
+            $periodStart = Carbon::parse($start)->startOfDay()->toDateTimeString();
+
             $employees = Employee::query()
                 ->with([
                     'department',
@@ -73,6 +83,42 @@ class PayrollController extends Controller
                 })
                 ->orderBy('employee_code')
                 ->get();
+
+            $cashAdvanceDeductionMap = CashAdvanceRequest::query()
+                ->selectRaw('employee_id, SUM(COALESCE(deduction_amount, amount)) AS total')
+                ->where('status', 'approved')
+                ->whereNotNull('approved_at')
+                ->whereNotNull('released_at')
+                ->where('approved_at', '<', $periodStart)
+                ->where('released_at', '<', $periodStart)
+                ->whereNull('deducted_payroll_run_id')
+                ->groupBy('employee_id')
+                ->pluck('total', 'employee_id');
+
+            $loanDeductionMap = LoanRequest::query()
+                ->where('status', 'approved')
+                ->where('loan_status', 'active')
+                ->whereNotNull('approved_at')
+                ->whereNotNull('released_at')
+                ->where('approved_at', '<', $periodStart)
+                ->where('released_at', '<', $periodStart)
+                ->where(function ($q) {
+                    $q->whereNull('remaining_balance')->orWhere('remaining_balance', '>', 0);
+                })
+                ->get()
+                ->groupBy('employee_id')
+                ->map(function ($loans) {
+                    $total = 0.0;
+                    foreach ($loans as $loan) {
+                        $monthly = (float) ($loan->monthly_amortization ?? 0);
+                        $remaining = (float) ($loan->remaining_balance ?? $loan->amount ?? 0);
+                        if ($monthly <= 0 || $remaining <= 0) {
+                            continue;
+                        }
+                        $total += min($monthly, $remaining);
+                    }
+                    return round($total, 2);
+                });
 
             $daily = AttendanceDailySummary::query()
                 ->when($selectedBatch, fn ($q) => $q->where('import_batch_id', $selectedBatch->id))
@@ -138,6 +184,27 @@ class PayrollController extends Controller
                 return $expected;
             };
 
+            $absenceValueForStatus = function ($status): float {
+                if ($status === null) {
+                    return 0.0;
+                }
+
+                $s = strtolower(trim((string) $status));
+                if ($s === '') {
+                    return 0.0;
+                }
+
+                if ($s === 'absent' || $s === 'whole day absent') {
+                    return 1.0;
+                }
+
+                if (str_contains($s, 'absent am') || str_contains($s, 'absent pm') || str_contains($s, 'half day (incomplete')) {
+                    return 0.5;
+                }
+
+                return 0.0;
+            };
+
             $buildLeaveDates = function ($leaveRequests) use ($startC, $endC) {
                 $leaveByDate = [];
 
@@ -198,9 +265,9 @@ class PayrollController extends Controller
                     ->filter(fn ($d) => $d && $d->summary_date)
                     ->keyBy(fn ($d) => $d->summary_date->format('Y-m-d'));
 
-                $regularWorkedDays = 0;
+                $regularWorkedDays = 0.0;
                 $restDayWorkedDays = 0;
-                $unpaidAbsenceDays = 0;
+                $unpaidAbsenceDays = 0.0;
 
                 for ($d = $startC->copy(); $d->lte($endC); $d->addDay()) {
                     $dateKey = $d->format('Y-m-d');
@@ -215,16 +282,19 @@ class PayrollController extends Controller
 
                     if ($isExpected) {
                         if ($status === null) {
-                            $unpaidAbsenceDays += 1;
+                            $unpaidAbsenceDays += 1.0;
                             continue;
                         }
-                        if (strtoupper($status) !== 'ABSENT') {
-                            $regularWorkedDays += 1;
+
+                        $absenceValue = $absenceValueForStatus($status);
+                        if ($absenceValue > 0) {
+                            $unpaidAbsenceDays += $absenceValue;
+                            $regularWorkedDays += max(1.0 - $absenceValue, 0.0);
                         } else {
-                            $unpaidAbsenceDays += 1;
+                            $regularWorkedDays += 1.0;
                         }
                     } else {
-                        if ($status !== null && strtoupper((string) $status) !== 'ABSENT') {
+                        if ($status !== null && $absenceValueForStatus($status) <= 0) {
                             $restDayWorkedDays += 1;
                         }
                     }
@@ -251,18 +321,11 @@ class PayrollController extends Controller
 
                 $otHours = round(((float) $approvedOt->get($emp->id, collect())->sum('hours')), 2);
 
-                $grossRegular = round($regularWorkedDays * $dailyRate, 2);
-                $grossPaidLeave = round($paidLeaveDays * $dailyRate, 2);
-                $grossRestDay = round($restDayWorkedDays * $dailyRate * 1.3, 2);
-
-                $baseWorkingDaysForPeriod = $regularWorkedDays + $paidLeaveDays + $unpaidLeaveDays + $unpaidAbsenceDays;
-                $grossBase = round($baseWorkingDaysForPeriod * $dailyRate, 2);
-                $gross = round($grossBase + $grossRestDay, 2);
+                $gross = round($regularWorkedDays * $dailyRate, 2);
+                $otPay = round($otHours * $hourlyRate * $otMultiplier, 2);
                 $lateDeduction = round($lateHours * $hourlyRate, 2);
                 $undertimeDeduction = round($undertimeHours * $hourlyRate, 2);
-                $absenceDeduction = round(($unpaidAbsenceDays + $unpaidLeaveDays) * $dailyRate, 2);
-
-                $otPay = round($otHours * $hourlyRate * $otMultiplier, 2);
+                $absenceDeduction = 0.0;
 
                 $sss = (float) ($emp->sss_deduction ?? 0);
 
@@ -272,12 +335,15 @@ class PayrollController extends Controller
 
                 $gov = $sss + $pagibig + $philhealth;
 
+                $defaultCashAdvance = (float) ($cashAdvanceDeductionMap->get($emp->id) ?? 0);
                 $cashAdvance = $request->input('cash_advance_deduction.' . $emp->id);
-                $cashAdvance = $cashAdvance !== null ? (float) $cashAdvance : (float) ($emp->cash_advance_deduction ?? 0);
+                $cashAdvance = $cashAdvance !== null ? (float) $cashAdvance : $defaultCashAdvance;
 
-                $totalDeductions = $gov + $cashAdvance;
+                $loanDeduction = (float) ($loanDeductionMap->get($emp->id) ?? 0);
 
-                $net = round($gross + $otPay - $lateDeduction - $undertimeDeduction - $absenceDeduction - $totalDeductions, 2);
+                $totalDeductions = $gov + $cashAdvance + $loanDeduction;
+
+                $net = round($gross + $otPay - $lateDeduction - $undertimeDeduction - $totalDeductions, 2);
 
                 $rows[] = [
                     'employee_id' => $emp->id,
@@ -308,20 +374,18 @@ class PayrollController extends Controller
                     'pagibig_deduction' => round($pagibig, 2),
                     'philhealth_deduction' => round($philhealth, 2),
                     'cash_advance_deduction' => round($cashAdvance, 2),
+                    'loan_deduction' => round($loanDeduction, 2),
                     'fixed_deductions_total' => round($totalDeductions, 2),
                     'total_government_deductions' => round($totalDeductions, 2),
                     'net_pay' => $net,
                 ];
             }
-
-            if ($request->isMethod('post') && (string) $request->input('save_government_deduction', '') === '1') {
-                foreach ($rows as $r) {
-                    Employee::query()->where('id', $r['employee_id'])->update([
-                        'cash_advance_deduction' => $r['cash_advance_deduction'],
-                    ]);
-                }
-            }
         }
+
+        $savedRuns = PayrollRun::query()
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get();
 
         return view('payroll.index', [
             'mode' => $mode,
@@ -332,7 +396,198 @@ class PayrollController extends Controller
             'batches' => $batches,
             'batch_uuid' => $batchUuid,
             'rows' => $rows,
+            'savedRuns' => $savedRuns,
         ]);
+    }
+
+    public function save(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'name' => ['nullable', 'string', 'max:255'],
+            'period_start' => ['required', 'date'],
+            'period_end' => ['required', 'date'],
+            'mode' => ['required', 'string'],
+            'base_hours_per_day' => ['required', 'numeric', 'min:1'],
+            'ot_multiplier' => ['required', 'numeric', 'min:0'],
+            'batch_id' => ['nullable', 'integer'],
+            'batch_uuid' => ['nullable', 'string', 'max:36'],
+            'rows' => ['required', 'string'],
+        ]);
+
+        $batchId = $validated['batch_id'] ?? null;
+        if (!$batchId) {
+            $batchUuid = trim((string) ($validated['batch_uuid'] ?? ''));
+            if ($batchUuid !== '') {
+                $batchId = AttendanceImportBatch::query()->where('uuid', $batchUuid)->value('id');
+            }
+        }
+
+        $rows = json_decode($validated['rows'], true);
+        if (!is_array($rows) || count($rows) === 0) {
+            return redirect()->back()->withErrors(['rows' => 'No payroll data to save.']);
+        }
+
+        $run = null;
+
+        DB::transaction(function () use ($validated, $batchId, $rows, $user, &$run) {
+            $nextRunId = ((int) PayrollRun::query()->max('id')) + 1;
+
+            $run = PayrollRun::create([
+                'id' => $nextRunId,
+                'uuid' => (string) Str::uuid(),
+                'name' => $validated['name'] ?: "Payroll {$validated['period_start']} to {$validated['period_end']}",
+                'period_start' => $validated['period_start'],
+                'period_end' => $validated['period_end'],
+                'mode' => $validated['mode'],
+                'base_hours_per_day' => $validated['base_hours_per_day'],
+                'ot_multiplier' => $validated['ot_multiplier'],
+                'batch_id' => $batchId ?: null,
+                'status' => 'draft',
+                'created_by' => optional($user->employee)->id,
+            ]);
+
+            foreach ($rows as $row) {
+                $nextItemId = ((int) PayrollItem::query()->max('id')) + 1;
+                PayrollItem::create([
+                    'id' => $nextItemId,
+                    'payroll_run_id' => $run->id,
+                    'employee_id' => $row['employee_id'],
+                    'employee_code' => $row['employee_code'] ?? null,
+                    'daily_rate' => $row['daily_rate'] ?? 0,
+                    'hourly_rate' => $row['hourly_rate'] ?? 0,
+                    'regular_worked_days' => $row['regular_worked_days'] ?? 0,
+                    'rest_day_worked_days' => $row['rest_day_worked_days'] ?? 0,
+                    'paid_leave_days' => $row['paid_leave_days'] ?? 0,
+                    'unpaid_leave_days' => $row['unpaid_leave_days'] ?? 0,
+                    'unpaid_absence_days' => $row['unpaid_absence_days'] ?? 0,
+                    'late_hours' => $row['late_hours'] ?? 0,
+                    'undertime_hours' => $row['undertime_hours'] ?? 0,
+                    'approved_ot_hours' => $row['approved_ot_hours'] ?? 0,
+                    'gross_pay' => $row['gross_pay'] ?? 0,
+                    'ot_pay' => $row['ot_pay'] ?? 0,
+                    'late_deduction' => $row['late_deduction'] ?? 0,
+                    'undertime_deduction' => $row['undertime_deduction'] ?? 0,
+                    'absence_deduction' => $row['absence_deduction'] ?? 0,
+                    'sss_deduction' => $row['sss_deduction'] ?? 0,
+                    'pagibig_deduction' => $row['pagibig_deduction'] ?? 0,
+                    'philhealth_deduction' => $row['philhealth_deduction'] ?? 0,
+                    'tax_deduction' => 0,
+                    'cash_advance_deduction' => $row['cash_advance_deduction'] ?? 0,
+                    'loan_deduction' => $row['loan_deduction'] ?? 0,
+                    'other_deductions' => 0,
+                    'total_deductions' => $row['fixed_deductions_total'] ?? 0,
+                    'net_pay' => $row['net_pay'] ?? 0,
+                ]);
+            }
+
+            $periodStart = Carbon::parse($validated['period_start'])->startOfDay();
+            $periodEnd = Carbon::parse($validated['period_end'])->startOfDay();
+
+            foreach ($rows as $row) {
+                $employeeId = (int) ($row['employee_id'] ?? 0);
+                if ($employeeId <= 0) {
+                    continue;
+                }
+
+                $cashAdv = CashAdvanceRequest::query()
+                    ->lockForUpdate()
+                    ->where('employee_id', $employeeId)
+                    ->where('status', 'approved')
+                    ->whereNotNull('approved_at')
+                    ->whereNotNull('released_at')
+                    ->where('approved_at', '<', $periodStart)
+                    ->where('released_at', '<', $periodStart)
+                    ->whereNull('deducted_payroll_run_id')
+                    ->get();
+
+                foreach ($cashAdv as $c) {
+                    $c->deducted_payroll_run_id = $run->id;
+                    $c->deducted_at = now();
+                    $c->deduction_amount = $c->deduction_amount ?? $c->amount;
+                    $c->save();
+                }
+
+                $loans = LoanRequest::query()
+                    ->lockForUpdate()
+                    ->where('employee_id', $employeeId)
+                    ->where('status', 'approved')
+                    ->where('loan_status', 'active')
+                    ->whereNotNull('approved_at')
+                    ->whereNotNull('released_at')
+                    ->where('approved_at', '<', $periodStart)
+                    ->where('released_at', '<', $periodStart)
+                    ->get();
+
+                foreach ($loans as $loan) {
+                    $monthly = (float) ($loan->monthly_amortization ?? 0);
+                    $remaining = (float) ($loan->remaining_balance ?? $loan->amount ?? 0);
+                    if ($monthly <= 0 || $remaining <= 0) {
+                        continue;
+                    }
+
+                    $paymentAmount = min($monthly, $remaining);
+                    if ($paymentAmount <= 0) {
+                        continue;
+                    }
+
+                    $nextPayId = ((int) LoanPayment::query()->max('id')) + 1;
+                    LoanPayment::query()->create([
+                        'id' => $nextPayId,
+                        'loan_request_id' => $loan->id,
+                        'employee_id' => $employeeId,
+                        'payroll_run_id' => $run->id,
+                        'amount' => $paymentAmount,
+                        'payment_date' => $periodEnd->toDateString(),
+                        'notes' => null,
+                    ]);
+
+                    $loan->total_paid = (float) ($loan->total_paid ?? 0) + $paymentAmount;
+                    $loan->remaining_balance = max($remaining - $paymentAmount, 0);
+                    $loan->loan_status = ((float) $loan->remaining_balance) <= 0 ? 'paid' : 'active';
+                    $loan->save();
+                }
+            }
+        });
+
+        ActivityLogger::log('created', 'PayrollRun', $run->id, "Saved payroll run: {$run->name}");
+
+        return redirect()->route('payroll.show', $run)->with('status', 'payroll-saved');
+    }
+
+    public function show(Request $request, PayrollRun $payrollRun)
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        $payrollRun->load(['items.employee.department', 'creator', 'approver', 'batch']);
+
+        return view('payroll.show', [
+            'run' => $payrollRun,
+        ]);
+    }
+
+    public function approve(Request $request, PayrollRun $payrollRun): RedirectResponse
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        $payrollRun->status = 'approved';
+        $payrollRun->approved_by = optional($user->employee)->id;
+        $payrollRun->approved_at = now();
+        $payrollRun->save();
+
+        ActivityLogger::log('approved', 'PayrollRun', $payrollRun->id, "Approved payroll run: {$payrollRun->name}");
+
+        return redirect()->route('payroll.show', $payrollRun)->with('status', 'payroll-approved');
     }
 
     private function resolveRange(Request $request, string $mode): array

@@ -1,13 +1,14 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight mb-0">
-                {{ __('Attendance Logs') }}
-            </h2>
-            <a href="{{ route('time-tracking.index') }}" class="btn btn-sm btn-outline-primary">
-                Back to Time Tracking
-            </a>
-        </div>
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Time Tracking') }}</h2>
+    </x-slot>
+
+    <x-slot name="headerNav">
+        <nav class="flex gap-6 -mb-px overflow-x-auto">
+            <a href="{{ route('time-tracking.index') }}" class="inline-flex items-center px-1 py-3 border-b-2 text-sm font-medium {{ request()->routeIs('time-tracking.index') ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">Time Tracking</a>
+            <a href="{{ route('time-tracking.logs') }}" class="inline-flex items-center px-1 py-3 border-b-2 text-sm font-medium {{ request()->routeIs('time-tracking.logs') ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">Logs</a>
+            <a href="{{ route('work-schedules.index') }}" class="inline-flex items-center px-1 py-3 border-b-2 text-sm font-medium {{ request()->routeIs('work-schedules.*') ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">Schedule</a>
+        </nav>
     </x-slot>
 
     @push('styles')

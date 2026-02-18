@@ -10,13 +10,21 @@ class LateRequest extends Model
     protected $fillable = [
         'id',
         'employee_id',
+        'import_batch_id',
         'date',
         'type',
         'minutes',
+        'detected_from_summary',
         'reason',
         'attachment_path',
+        'corrected_time_in',
+        'corrected_break_out',
+        'corrected_break_in',
+        'corrected_time_out',
         'status',
         'approved_by',
+        'corrected_by',
+        'corrected_at',
         'admin_notes',
     ];
 
@@ -25,6 +33,8 @@ class LateRequest extends Model
 
     protected $casts = [
         'date' => 'date',
+        'detected_from_summary' => 'bool',
+        'corrected_at' => 'datetime',
     ];
 
     public function employee(): BelongsTo

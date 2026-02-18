@@ -3,6 +3,14 @@
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Time Tracking') }}</h2>
     </x-slot>
 
+    <x-slot name="headerNav">
+        <nav class="flex gap-6 -mb-px overflow-x-auto">
+            <a href="{{ route('time-tracking.index') }}" class="inline-flex items-center px-1 py-3 border-b-2 text-sm font-medium {{ request()->routeIs('time-tracking.index') ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">Time Tracking</a>
+            <a href="{{ route('time-tracking.logs') }}" class="inline-flex items-center px-1 py-3 border-b-2 text-sm font-medium {{ request()->routeIs('time-tracking.logs') ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">Logs</a>
+            <a href="{{ route('work-schedules.index') }}" class="inline-flex items-center px-1 py-3 border-b-2 text-sm font-medium {{ request()->routeIs('work-schedules.*') ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">Schedule</a>
+        </nav>
+    </x-slot>
+
     @push('styles')
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
@@ -107,6 +115,16 @@
                 margin: 0;
                 font-size: 0.85rem;
                 color: #6c757d;
+            }
+            .upload-area.upload-area-compact .upload-filename {
+                margin: 0;
+                font-size: 0.8rem;
+                color: #0d6efd;
+                font-weight: 600;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 220px;
             }
             .loading {
                 display: none;
@@ -219,22 +237,6 @@
 
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="flex flex-col lg:flex-row gap-6">
-                <aside class="w-full lg:w-64">
-                    <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-                        <div class="px-4 py-4 border-b bg-gray-50">
-                            <div class="text-sm font-semibold text-gray-900">Attendance</div>
-                        </div>
-
-                        <nav class="p-2">
-                            <a href="{{ route('time-tracking.index') }}" class="block px-3 py-2 rounded-md text-sm bg-indigo-50 text-indigo-700 font-semibold">Time Tracking</a>
-                            <a href="{{ route('time-tracking.logs') }}" class="block px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-50">Logs</a>
-                            <a href="{{ route('work-schedules.index') }}" class="block px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-50">Schedule</a>
-                        </nav>
-                    </div>
-                </aside>
-
-                <main class="flex-1">
                     <div class="container px-0 py-0">
                         <div class="row">
                             <div class="col-12">
@@ -243,7 +245,7 @@
                         <div class="d-flex flex-wrap align-items-center gap-2">
                             <div class="d-flex flex-column" style="min-width: 260px;">
                                 <select id="savedBatchSelect" class="form-select form-select-sm" disabled>
-                                    <option value="">Loading...</option>
+                                    <option value="">Loading...</option>    
                                 </select>
                             </div>
 
@@ -254,6 +256,7 @@
                                         <div>
                                             <p class="upload-title">Upload CSV</p>
                                             <p class="upload-subtitle">Drop file here or browse</p>
+                                            <p id="csvFileName" class="upload-filename d-none"></p>
                                         </div>
                                     </div>
                                     <div class="d-flex align-items-center gap-2">
@@ -278,13 +281,9 @@
                 <p class="mt-2">Processing time records...</p>
             </div>
 
-            <div id="restDayNote" class="alert alert-info" style="display: none;">
-                <div class="fw-semibold">Rest Day clarification</div>
-                <div class="small">
-                    A <span class="fw-semibold">Rest Day</span> is any date that is <span class="fw-semibold">not scheduled as a working day</span> for the employee based on Work Schedules (weekly schedule + overrides).
-                    If the employee has logs on a Rest Day, it is counted as <span class="fw-semibold">worked</span> and paid with a premium in Payroll.
-                </div>
-            </div>
+            <div id="csvFeedback" class="alert d-none" role="alert"></div>
+
+           
 
             <div id="summarySection" class="row mb-4" style="display: none;">
                 <div class="col-md-3 col-sm-6 mb-3">
@@ -540,9 +539,7 @@
                             </div>
                         </div>
                     </div>
-                        </div>
-                    </div>
-                </main>
+                </div>
             </div>
         </div>
     </div>
@@ -750,8 +747,15 @@
                 const file = csvFileInput.files[0];
                 if (!file) return;
 
+                if (csvFileNameEl) {
+                    csvFileNameEl.textContent = file.name;
+                    csvFileNameEl.classList.remove('d-none');
+                }
+
+                hideCsvFeedback();
+
                 if (!file.name.toLowerCase().endsWith('.csv')) {
-                    alert('Please upload a CSV file');
+                    showCsvFeedback('danger', 'Please upload a CSV file.');
                     return;
                 }
 
@@ -770,17 +774,31 @@
 
                         saveCsvToServer();
                     } catch (error) {
-                        alert('Error processing CSV file: ' + error.message);
+                        showCsvFeedback('danger', 'Error processing CSV file: ' + (error?.message || error));
                         hideLoading();
                     }
                 };
                 reader.readAsText(file);
             }
 
+            function showCsvFeedback(type, message) {
+                if (!csvFeedback) return;
+                csvFeedback.className = `alert alert-${type}`;
+                csvFeedback.textContent = String(message || '');
+                csvFeedback.classList.remove('d-none');
+            }
+
+            function hideCsvFeedback() {
+                if (!csvFeedback) return;
+                csvFeedback.classList.add('d-none');
+                csvFeedback.textContent = '';
+                csvFeedback.className = 'alert d-none';
+            }
+
             function saveCsvToServer() {
                 const file = window.__selectedCsvFile;
                 if (!file) {
-                    alert('Please upload a CSV first.');
+                    showCsvFeedback('warning', 'Please upload a CSV first.');
                     return;
                 }
 
@@ -810,7 +828,7 @@
                     const msg = c
                         ? `Saved! Logs: ${c.logs}, Daily: ${c.daily_summaries}, Period: ${c.period_summaries}`
                         : 'Saved!';
-                    alert(msg);
+                    showCsvFeedback('success', msg);
 
                     const batchUuid = String(data?.batch_uuid || '');
                     if (batchUuid) {
@@ -821,7 +839,7 @@
                     }
                 })
                 .catch((err) => {
-                    alert('Server save failed: ' + (err?.message || err));
+                    showCsvFeedback('danger', 'Server save failed: ' + (err?.message || err));
                 })
                 .finally(() => {
                     if (saveCsvBtn) {
@@ -886,7 +904,7 @@
                             totalHours: (Number(d.total_hours || 0)).toFixed(2),
                             status: mapDbStatusToUi(d.status),
                             missedLogs: Number(d.missed_logs || 0),
-                            isWholeDayAbsent: String(d.status || '').toUpperCase() === 'ABSENT'
+                            isWholeDayAbsent: String(d.status || '').toUpperCase() === 'ABSENT' || String(d.status || '').toLowerCase().includes('whole day absent')
                         };
                     });
 
@@ -902,6 +920,7 @@
                             missedPunches: Number(p.missed_logs_count || 0),
                             graceDays: Number(p.grace_days || 0),
                             absences: Number(p.absences || 0),
+                            absenceDates: Array.isArray(p.absence_dates) ? p.absence_dates : [],
                             daysWorked: Number(p.days_worked || 0),
                             leavePaidDays: Number(p.leave_paid_days || 0),
                             leaveUnpaidDays: Number(p.leave_unpaid_days || 0),
@@ -977,7 +996,7 @@
                             totalHours: (Number(d.total_hours || 0)).toFixed(2),
                             status: mapDbStatusToUi(d.status),
                             missedLogs: Number(d.missed_logs || 0),
-                            isWholeDayAbsent: String(d.status || '').toUpperCase() === 'ABSENT'
+                            isWholeDayAbsent: String(d.status || '').toUpperCase() === 'ABSENT' || String(d.status || '').toLowerCase().includes('whole day absent')
                         };
                     });
 
@@ -993,6 +1012,7 @@
                             missedPunches: Number(p.missed_logs_count || 0),
                             graceDays: Number(p.grace_days || 0),
                             absences: Number(p.absences || 0),
+                            absenceDates: Array.isArray(p.absence_dates) ? p.absence_dates : [],
                             daysWorked: Number(p.days_worked || 0),
                             leavePaidDays: Number(p.leave_paid_days || 0),
                             leaveUnpaidDays: Number(p.leave_unpaid_days || 0),
@@ -1020,6 +1040,8 @@
 
             const savedBatchSelect = document.getElementById('savedBatchSelect');
             const viewSavedBtn = document.getElementById('viewSavedBtn');
+            const csvFeedback = document.getElementById('csvFeedback');
+            const csvFileNameEl = document.getElementById('csvFileName');
 
             function formatBatchLabel(b) {
                 const start = b?.date_start ? String(b.date_start) : '';
@@ -1105,13 +1127,16 @@
             loadImportBatchesAndMaybeAutoLoad();
 
             function mapDbStatusToUi(status) {
-                const s = String(status || '').toUpperCase();
+                // AttendanceDailySummary.status is stored as the detailed UI status text.
+                // Backward-compatible with legacy codes (ON_TIME/LATE/UNDERTIME/MISSED_LOG/ABSENT).
+                const raw = String(status || '');
+                const s = raw.toUpperCase();
                 if (s === 'ON_TIME') return 'Ontime';
                 if (s === 'LATE') return 'Late';
                 if (s === 'UNDERTIME') return 'Undertime';
                 if (s === 'MISSED_LOG') return 'Incomplete Logs';
                 if (s === 'ABSENT') return 'Whole Day Absent';
-                return String(status || '');
+                return raw;
             }
 
             function parseCSVLine(line, regex) {
@@ -1325,8 +1350,6 @@
                         if (statusText.includes('half day')) monthlySummary[data.employeeId].halfDayCount += 1;
                     }
                 }
-
-                processedData = addWholeDayAbsences(processedData);
 
                 processedData.sort((a, b) => {
                     const nameCompare = a.employeeName.localeCompare(b.employeeName, undefined, { sensitivity: 'base' });
@@ -1662,6 +1685,22 @@
                     row.title = "Click to view this employee's daily time records";
                     const totalAbsences = Number(summary.absences || 0);
                     const absencesDisplay = Number.isInteger(totalAbsences) ? String(totalAbsences.toFixed(0)) : totalAbsences.toFixed(1);
+
+                    const daysWorked = Number(summary.daysWorked || 0);
+                    const daysWorkedDisplay = Number.isInteger(daysWorked)
+                        ? String(daysWorked.toFixed(0))
+                        : daysWorked.toFixed(1);
+
+                    const leavePaidDays = Number(summary.leavePaidDays || 0);
+                    const leavePaidDaysDisplay = Number.isInteger(leavePaidDays)
+                        ? String(leavePaidDays.toFixed(0))
+                        : leavePaidDays.toFixed(1);
+
+                    const leaveUnpaidDays = Number(summary.leaveUnpaidDays || 0);
+                    const leaveUnpaidDaysDisplay = Number.isInteger(leaveUnpaidDays)
+                        ? String(leaveUnpaidDays.toFixed(0))
+                        : leaveUnpaidDays.toFixed(1);
+
                     const undertimeFrequency = summary.totalUndertimeFrequency || 0;
                     const eligibleLate = lateFrequency > 3 || summary.totalUndertimeFrequency > 3;
                     const eligibleMissed = (summary.missedLogDays || 0) > 0;
@@ -1693,14 +1732,14 @@
                         <td><span class="fw-bold">${missedLogsDisplay}</span></td>
                         <td><span class="fw-bold">${summary.graceDays || 0}</span></td>
                         <td><span class="fw-bold">${absencesDisplay}</span></td>
-                        <td><span class="fw-bold">${Number.isInteger(summary.daysWorked) ? String(summary.daysWorked.toFixed(0)) : summary.daysWorked.toFixed(1)}</span></td>
+                        <td><span class="fw-bold">${daysWorkedDisplay}</span></td>
                         <td>${summary.totalLateMinutes} min</td>
                         <td>${avgLate} min</td>
                         <td>${summary.totalUndertime} min</td>
                         <td><span class="fw-bold">${undertimeFrequency}</span></td>
                         <td>${mostFrequentLate}</td>
-                        <td><span class="fw-bold">${Number.isInteger(summary.leavePaidDays) ? String(summary.leavePaidDays.toFixed(0)) : summary.leavePaidDays.toFixed(1)}</span></td>
-                        <td><span class="fw-bold">${Number.isInteger(summary.leaveUnpaidDays) ? String(summary.leaveUnpaidDays.toFixed(0)) : summary.leaveUnpaidDays.toFixed(1)}</span></td>
+                        <td><span class="fw-bold">${leavePaidDaysDisplay}</span></td>
+                        <td><span class="fw-bold">${leaveUnpaidDaysDisplay}</span></td>
                         <td>${letterCell}</td>
                     `;
                     row.addEventListener('click', (e) => {
@@ -1946,7 +1985,9 @@
 
                 const deptLabel = selectedDepartment === 'ALL' ? 'All Departments' : selectedDepartment;
                 employeeDailyModalLabel.textContent = `Daily Time Records — ${summary.employeeName} (${empId})`;
-                employeeDailyModalMeta.textContent = `Department Filter: ${deptLabel}`;
+                const absDates = Array.isArray(summary.absenceDates) ? summary.absenceDates : [];
+                const absLabel = absDates.length ? absDates.join(', ') : '-';
+                employeeDailyModalMeta.textContent = `Department Filter: ${deptLabel} | Absence Dates (no logs): ${absLabel}`;
 
                 employeeDailyModalBody.innerHTML = '';
                 if (records.length === 0) {

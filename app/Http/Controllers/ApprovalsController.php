@@ -31,6 +31,16 @@ class ApprovalsController extends Controller
         $pendingLate = LateRequest::query()
             ->with(['employee', 'approver'])
             ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->whereNull('detected_from_summary')
+                    ->orWhere('detected_from_summary', false)
+                    ->orWhere(function ($q2) {
+                        $q2->where('detected_from_summary', true)
+                            ->where(function ($q3) {
+                                $q3->whereNotNull('reason')->orWhereNotNull('attachment_path');
+                            });
+                    });
+            })
             ->orderByDesc('id')
             ->paginate(20, ['*'], 'late_page');
 

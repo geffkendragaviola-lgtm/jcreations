@@ -193,7 +193,7 @@ class WorkScheduleController extends Controller
         $absentSummaries = AttendanceDailySummary::query()
             ->where('employee_code', $employee->employee_code)
             ->whereBetween('summary_date', [$start->toDateString(), $end->toDateString()])
-            ->where('status', 'ABSENT')
+            ->whereRaw('LOWER(status) LIKE ?', ['%absent%'])
             ->get();
 
         $absentDates = $absentSummaries

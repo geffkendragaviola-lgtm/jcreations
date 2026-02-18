@@ -7,6 +7,7 @@ use App\Models\LateRequest;
 use App\Models\OvertimeRequest;
 use App\Models\CashAdvanceRequest;
 use App\Models\LoanRequest;
+use App\Models\AbsenceNotice;
 use Illuminate\Http\Request;
 
 class RequestsController extends Controller
@@ -27,15 +28,35 @@ class RequestsController extends Controller
 
         $leaveQuery = LeaveRequest::query()->with(['employee', 'approver']);
         $otQuery = OvertimeRequest::query()->with(['employee', 'approver']);
-        $lateQuery = LateRequest::query()->with(['employee', 'approver']);
-        $cashAdvanceQuery = CashAdvanceRequest::query()->with(['employee', 'approver']);
-        $loanQuery = LoanRequest::query()->with(['employee', 'approver']);
+        $lateQuery = LateRequest::query()
+            ->with(['employee', 'approver'])
+            ->where(function ($q) {
+                $q->whereNull('detected_from_summary')->orWhere('detected_from_summary', false);
+            });
+        $cashAdvanceQuery = CashAdvanceRequest::query()->with(['employee', 'approver', 'releaser']);
+        $loanQuery = LoanRequest::query()->with(['employee', 'approver', 'releaser']);
 
         $pendingInbox = null;
+        $forRelease = null;
         if ($user->canManageBackoffice()) {
             $pendingAbsencesQuery = LeaveRequest::query()
                 ->with(['employee', 'approver'])
                 ->where('status', 'pending')
+                ->orderByDesc('id');
+
+            $pendingAbsenceNoticesQuery = AbsenceNotice::query()
+                ->with(['employee', 'approver'])
+                ->where('status', 'pending')
+                ->where(function ($q) {
+                    $q->whereNull('detected_from_summary')
+                        ->orWhere('detected_from_summary', false)
+                        ->orWhere(function ($q2) {
+                            $q2->where('detected_from_summary', true)
+                                ->where(function ($q3) {
+                                    $q3->whereNotNull('reason')->orWhereNotNull('attachment_path');
+                                });
+                        });
+                })
                 ->orderByDesc('id');
 
             $pendingOvertimeQuery = OvertimeRequest::query()
@@ -46,31 +67,64 @@ class RequestsController extends Controller
             $pendingLateQuery = LateRequest::query()
                 ->with(['employee', 'approver'])
                 ->where('status', 'pending')
+                ->where(function ($q) {
+                    $q->whereNull('detected_from_summary')
+                        ->orWhere('detected_from_summary', false)
+                        ->orWhere(function ($q2) {
+                            $q2->where('detected_from_summary', true)
+                                ->where(function ($q3) {
+                                    $q3->whereNotNull('reason')->orWhereNotNull('attachment_path');
+                                });
+                        });
+                })
                 ->orderByDesc('id');
 
             $pendingCashAdvanceQuery = CashAdvanceRequest::query()
-                ->with(['employee', 'approver'])
+                ->with(['employee', 'approver', 'releaser'])
                 ->where('status', 'pending')
                 ->orderByDesc('id');
 
             $pendingLoanQuery = LoanRequest::query()
-                ->with(['employee', 'approver'])
+                ->with(['employee', 'approver', 'releaser'])
                 ->where('status', 'pending')
+                ->orderByDesc('id');
+
+            $forReleaseCashAdvanceQuery = CashAdvanceRequest::query()
+                ->with(['employee', 'approver', 'releaser'])
+                ->where('status', 'approved')
+                ->whereNull('released_at')
+                ->orderByDesc('id');
+
+            $forReleaseLoanQuery = LoanRequest::query()
+                ->with(['employee', 'approver', 'releaser'])
+                ->where('status', 'approved')
+                ->whereNull('released_at')
                 ->orderByDesc('id');
 
             $pendingInbox = [
                 'counts' => [
                     'absence' => (clone $pendingAbsencesQuery)->count(),
+                    'absence_notice' => (clone $pendingAbsenceNoticesQuery)->count(),
                     'overtime' => (clone $pendingOvertimeQuery)->count(),
                     'late' => (clone $pendingLateQuery)->count(),
                     'cash_advance' => (clone $pendingCashAdvanceQuery)->count(),
                     'loan' => (clone $pendingLoanQuery)->count(),
                 ],
                 'absence' => $pendingAbsencesQuery->limit(5)->get(),
+                'absence_notice' => $pendingAbsenceNoticesQuery->limit(5)->get(),
                 'overtime' => $pendingOvertimeQuery->limit(5)->get(),
                 'late' => $pendingLateQuery->limit(5)->get(),
                 'cash_advance' => $pendingCashAdvanceQuery->limit(5)->get(),
                 'loan' => $pendingLoanQuery->limit(5)->get(),
+            ];
+
+            $forRelease = [
+                'counts' => [
+                    'cash_advance' => (clone $forReleaseCashAdvanceQuery)->count(),
+                    'loan' => (clone $forReleaseLoanQuery)->count(),
+                ],
+                'cash_advance' => $forReleaseCashAdvanceQuery->limit(5)->get(),
+                'loan' => $forReleaseLoanQuery->limit(5)->get(),
             ];
         }
 
@@ -115,6 +169,7 @@ class RequestsController extends Controller
                 'status' => $status,
             ],
             'pendingInbox' => $pendingInbox,
+            'forRelease' => $forRelease,
             'leaveRequests' => $leaveRequests,
             'overtimeRequests' => $overtimeRequests,
             'lateRequests' => $lateRequests,

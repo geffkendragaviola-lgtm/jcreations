@@ -113,4 +113,22 @@ class DepartmentManagementController extends Controller
 
         return Redirect::route('departments.index')->with('status', 'department-updated');
     }
+
+    public function destroy(Request $request, Department $department): RedirectResponse
+    {
+        $user = $request->user();
+        if (!$user?->canManageBackoffice()) {
+            abort(403);
+        }
+
+        if ($department->employees()->exists()) {
+            return Redirect::route('departments.index')->withErrors([
+                'department' => 'Cannot delete a department that has employees assigned.',
+            ]);
+        }
+
+        $department->delete();
+
+        return Redirect::route('departments.index')->with('status', 'department-deleted');
+    }
 }

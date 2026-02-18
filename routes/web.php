@@ -73,6 +73,19 @@ Route::get('/users', [\App\Http\Controllers\UserManagementController::class, 'in
     ->middleware(['auth', 'verified'])
     ->name('users.index');
 
+Route::post('/users', [\App\Http\Controllers\UserManagementController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('users.store');
+Route::get('/users/{user}/edit', [\App\Http\Controllers\UserManagementController::class, 'edit'])
+    ->middleware(['auth', 'verified'])
+    ->name('users.edit');
+Route::patch('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('users.update');
+Route::delete('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('users.destroy');
+
 Route::get('/leave-requests', [\App\Http\Controllers\LeaveRequestController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('leave-requests.index');
@@ -102,9 +115,17 @@ Route::patch('/overtime-requests/{id}/reject', [\App\Http\Controllers\OvertimeRe
 Route::post('/cash-advance-requests', [\App\Http\Controllers\CashAdvanceRequestController::class, 'store'])
     ->middleware(['auth', 'verified'])
     ->name('cash-advance-requests.store');
+
+Route::get('/cash-advance-requests/{id}', [\App\Http\Controllers\CashAdvanceRequestController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('cash-advance-requests.show');
+
 Route::patch('/cash-advance-requests/{id}/approve', [\App\Http\Controllers\CashAdvanceRequestController::class, 'approve'])
     ->middleware(['auth', 'verified'])
     ->name('cash-advance-requests.approve');
+Route::patch('/cash-advance-requests/{id}/release', [\App\Http\Controllers\CashAdvanceRequestController::class, 'release'])
+    ->middleware(['auth', 'verified'])
+    ->name('cash-advance-requests.release');
 Route::patch('/cash-advance-requests/{id}/reject', [\App\Http\Controllers\CashAdvanceRequestController::class, 'reject'])
     ->middleware(['auth', 'verified'])
     ->name('cash-advance-requests.reject');
@@ -112,9 +133,16 @@ Route::patch('/cash-advance-requests/{id}/reject', [\App\Http\Controllers\CashAd
 Route::post('/loan-requests', [\App\Http\Controllers\LoanRequestController::class, 'store'])
     ->middleware(['auth', 'verified'])
     ->name('loan-requests.store');
+
+Route::get('/loan-requests/{id}', [\App\Http\Controllers\LoanRequestController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('loan-requests.show');
 Route::patch('/loan-requests/{id}/approve', [\App\Http\Controllers\LoanRequestController::class, 'approve'])
     ->middleware(['auth', 'verified'])
     ->name('loan-requests.approve');
+Route::patch('/loan-requests/{id}/release', [\App\Http\Controllers\LoanRequestController::class, 'release'])
+    ->middleware(['auth', 'verified'])
+    ->name('loan-requests.release');
 Route::patch('/loan-requests/{id}/reject', [\App\Http\Controllers\LoanRequestController::class, 'reject'])
     ->middleware(['auth', 'verified'])
     ->name('loan-requests.reject');
@@ -132,6 +160,32 @@ Route::patch('/late-requests/{id}/reject', [\App\Http\Controllers\LateRequestCon
     ->middleware(['auth', 'verified'])
     ->name('late-requests.reject');
 
+Route::get('/absence-notices', [\App\Http\Controllers\AbsenceNoticeController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('absence-notices.index');
+Route::post('/absence-notices', [\App\Http\Controllers\AbsenceNoticeController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('absence-notices.store');
+Route::patch('/absence-notices/{id}/approve', [\App\Http\Controllers\AbsenceNoticeController::class, 'approve'])
+    ->middleware(['auth', 'verified'])
+    ->name('absence-notices.approve');
+Route::patch('/absence-notices/{id}/reject', [\App\Http\Controllers\AbsenceNoticeController::class, 'reject'])
+    ->middleware(['auth', 'verified'])
+    ->name('absence-notices.reject');
+
+Route::get('/time-adjustment-requests', [\App\Http\Controllers\TimeAdjustmentRequestController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('time-adjustment-requests.index');
+Route::post('/time-adjustment-requests', [\App\Http\Controllers\TimeAdjustmentRequestController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('time-adjustment-requests.store');
+Route::patch('/time-adjustment-requests/{id}/approve', [\App\Http\Controllers\TimeAdjustmentRequestController::class, 'approve'])
+    ->middleware(['auth', 'verified'])
+    ->name('time-adjustment-requests.approve');
+Route::patch('/time-adjustment-requests/{id}/reject', [\App\Http\Controllers\TimeAdjustmentRequestController::class, 'reject'])
+    ->middleware(['auth', 'verified'])
+    ->name('time-adjustment-requests.reject');
+
 Route::get('/approvals', function () {
     return redirect()->route('requests.index', ['status' => 'pending']);
 })->middleware(['auth', 'verified'])->name('approvals.index');
@@ -140,9 +194,26 @@ Route::match(['get', 'post'], '/payroll', [\App\Http\Controllers\PayrollControll
     ->middleware(['auth', 'verified'])
     ->name('payroll.index');
 
+Route::post('/payroll/save', [\App\Http\Controllers\PayrollController::class, 'save'])
+    ->middleware(['auth', 'verified'])
+    ->name('payroll.save');
+Route::get('/payroll/{payrollRun}', [\App\Http\Controllers\PayrollController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('payroll.show');
+Route::patch('/payroll/{payrollRun}/approve', [\App\Http\Controllers\PayrollController::class, 'approve'])
+    ->middleware(['auth', 'verified'])
+    ->name('payroll.approve');
+
 Route::get('/employees', [\App\Http\Controllers\EmployeeManagementController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('employees.index');
+
+Route::get('/employees/create', [\App\Http\Controllers\EmployeeManagementController::class, 'create'])
+    ->middleware(['auth', 'verified'])
+    ->name('employees.create');
+Route::post('/employees', [\App\Http\Controllers\EmployeeManagementController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('employees.store');
 
 Route::get('/employees/incomplete-employment', [\App\Http\Controllers\EmployeeManagementController::class, 'incompleteEmployment'])
     ->middleware(['auth', 'verified'])
@@ -199,6 +270,66 @@ Route::post('/departments', [\App\Http\Controllers\DepartmentManagementControlle
 Route::patch('/departments/{department}', [\App\Http\Controllers\DepartmentManagementController::class, 'update'])
     ->middleware(['auth', 'verified'])
     ->name('departments.update');
+
+Route::delete('/departments/{department}', [\App\Http\Controllers\DepartmentManagementController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('departments.destroy');
+
+Route::post('/loan-requests/{id}/payments', [\App\Http\Controllers\LoanRequestController::class, 'addPayment'])
+    ->middleware(['auth', 'verified'])
+    ->name('loan-requests.payments.store');
+
+Route::get('/holidays', [\App\Http\Controllers\HolidayController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('holidays.index');
+Route::post('/holidays', [\App\Http\Controllers\HolidayController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('holidays.store');
+Route::patch('/holidays/{holiday}', [\App\Http\Controllers\HolidayController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('holidays.update');
+Route::delete('/holidays/{holiday}', [\App\Http\Controllers\HolidayController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('holidays.destroy');
+
+Route::get('/disciplinary-actions', [\App\Http\Controllers\DisciplinaryActionController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('disciplinary-actions.index');
+Route::post('/disciplinary-actions', [\App\Http\Controllers\DisciplinaryActionController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('disciplinary-actions.store');
+Route::patch('/disciplinary-actions/{disciplinaryAction}', [\App\Http\Controllers\DisciplinaryActionController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('disciplinary-actions.update');
+Route::delete('/disciplinary-actions/{disciplinaryAction}', [\App\Http\Controllers\DisciplinaryActionController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('disciplinary-actions.destroy');
+
+Route::get('/leave-balances', [\App\Http\Controllers\LeaveBalanceController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('leave-balances.index');
+Route::post('/leave-balances', [\App\Http\Controllers\LeaveBalanceController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('leave-balances.store');
+Route::patch('/leave-balances/{leaveBalance}', [\App\Http\Controllers\LeaveBalanceController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('leave-balances.update');
+Route::post('/leave-balances/bulk-create', [\App\Http\Controllers\LeaveBalanceController::class, 'bulkCreate'])
+    ->middleware(['auth', 'verified'])
+    ->name('leave-balances.bulk-create');
+
+Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.index');
+Route::get('/reports/attendance.csv', [\App\Http\Controllers\ReportController::class, 'attendanceCsv'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.attendance.csv');
+Route::get('/reports/leaves.csv', [\App\Http\Controllers\ReportController::class, 'leavesCsv'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.leaves.csv');
+Route::get('/reports/payroll.csv', [\App\Http\Controllers\ReportController::class, 'payrollCsv'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.payroll.csv');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

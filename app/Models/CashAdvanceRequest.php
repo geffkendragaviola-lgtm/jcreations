@@ -11,9 +11,15 @@ class CashAdvanceRequest extends Model
         'id',
         'employee_id',
         'amount',
+        'deduction_amount',
         'reason',
         'status',
         'approved_by',
+        'approved_at',
+        'released_by',
+        'released_at',
+        'deducted_payroll_run_id',
+        'deducted_at',
         'admin_notes',
         'attachment_path',
     ];
@@ -23,6 +29,10 @@ class CashAdvanceRequest extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'deduction_amount' => 'decimal:2',
+        'approved_at' => 'datetime',
+        'released_at' => 'datetime',
+        'deducted_at' => 'datetime',
     ];
 
     public function employee(): BelongsTo
@@ -33,5 +43,10 @@ class CashAdvanceRequest extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'approved_by');
+    }
+
+    public function releaser(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'released_by');
     }
 }

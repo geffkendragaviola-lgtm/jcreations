@@ -113,6 +113,7 @@ class AttendanceSummaryController extends Controller
         }
 
         $computedAbsencesByEmployeeCode = [];
+        $computedAbsenceDatesByEmployeeCode = [];
         $computedLeaveByEmployeeCode = [];
         $computedDaysWorkedByEmployeeCode = [];
 
@@ -154,10 +155,32 @@ class AttendanceSummaryController extends Controller
         };
 
         foreach ($employeeCodes as $code) {
-            $absences = 0;
+            $absences = 0.0;
+            $absenceDates = [];
             $paidLeaveDays = 0.0;
             $unpaidLeaveDays = 0.0;
             $daysWorked = 0;
+
+            $absenceValueForStatus = function ($status): float {
+                if ($status === null) {
+                    return 0.0;
+                }
+
+                $s = strtolower(trim((string) $status));
+                if ($s === '') {
+                    return 0.0;
+                }
+
+                if ($s === 'absent' || $s === 'whole day absent') {
+                    return 1.0;
+                }
+
+                if (str_contains($s, 'absent am') || str_contains($s, 'absent pm') || str_contains($s, 'half day (incomplete')) {
+                    return 0.5;
+                }
+
+                return 0.0;
+            };
 
             $emp = $employeeByCode->get($code);
             if (!$emp) {
@@ -189,24 +212,28 @@ class AttendanceSummaryController extends Controller
 
                 if ($isExpected) {
                     if ($status === null) {
-                        $absences += 1;
+                        $absences += 1.0;
+                        $absenceDates[] = $dateStr;
                         continue;
                     }
 
-                    if (strtoupper($status) === 'ABSENT') {
-                        $absences += 1;
+                    $absenceValue = $absenceValueForStatus($status);
+                    if ($absenceValue > 0) {
+                        $absences += $absenceValue;
+                        $absenceDates[] = $dateStr;
                     } else {
                         $daysWorked += 1;
                     }
                 } else {
-                    // Rest day work: count as worked only if there is a log/summary and not ABSENT.
-                    if ($status !== null && strtoupper((string) $status) !== 'ABSENT') {
+                    // Rest day work: count as worked only if there is a log/summary and not an absence.
+                    if ($status !== null && $absenceValueForStatus($status) <= 0) {
                         $daysWorked += 1;
                     }
                 }
             }
 
             $computedAbsencesByEmployeeCode[$code] = $absences;
+            $computedAbsenceDatesByEmployeeCode[$code] = array_values(array_unique($absenceDates));
             $computedLeaveByEmployeeCode[$code] = [
                 'paid' => $paidLeaveDays,
                 'unpaid' => $unpaidLeaveDays,
@@ -246,7 +273,7 @@ class AttendanceSummaryController extends Controller
                     'status' => $d->status,
                 ];
             })->values(),
-            'period' => $employees->map(function ($emp) use ($periodByEmployeeCode, $computedAbsencesByEmployeeCode, $computedLeaveByEmployeeCode, $computedDaysWorkedByEmployeeCode, $start, $end) {
+            'period' => $employees->map(function ($emp) use ($periodByEmployeeCode, $computedAbsencesByEmployeeCode, $computedAbsenceDatesByEmployeeCode, $computedLeaveByEmployeeCode, $computedDaysWorkedByEmployeeCode, $start, $end) {
                 $employeeCode = (string) ($emp->employee_code ?? '');
                 $p = $periodByEmployeeCode->get($employeeCode);
 
@@ -268,7 +295,8 @@ class AttendanceSummaryController extends Controller
                     'late_frequency' => $lateFrequency,
                     'missed_logs_count' => $missedLogsCount,
                     'grace_days' => $graceDays,
-                    'absences' => (int) ($computedAbsencesByEmployeeCode[$employeeCode] ?? 0),
+                    'absences' => (float) ($computedAbsencesByEmployeeCode[$employeeCode] ?? 0),
+                    'absence_dates' => array_values($computedAbsenceDatesByEmployeeCode[$employeeCode] ?? []),
                     'days_worked' => (int) ($computedDaysWorkedByEmployeeCode[$employeeCode] ?? (int) ($p?->days_worked ?? 0)),
                     'late_duration' => $lateDuration,
                     'avg_late_per_occurrence' => $avgLate,

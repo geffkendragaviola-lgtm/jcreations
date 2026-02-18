@@ -6,7 +6,10 @@ use App\Models\AttendanceDailySummary;
 use App\Models\AttendanceImportBatch;
 use App\Models\AttendanceLog;
 use App\Models\AttendancePeriodSummary;
+use App\Models\AbsenceNotice;
 use App\Models\Employee;
+use App\Models\LateRequest;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -270,6 +273,205 @@ class AttendanceCsvUploadController extends Controller
                     'updated_at',
                 ]
             );
+
+            $employeeIdByCode = Employee::query()
+                ->whereIn('employee_code', $affectedEmployeeCodes)
+                ->pluck('id', 'employee_code')
+                ->all();
+
+            $existing = LateRequest::query()
+                ->whereIn('employee_id', array_values(array_unique(array_filter(array_values($employeeIdByCode)))))
+                ->whereDate('date', '>=', $minDate)
+                ->whereDate('date', '<=', $maxDate)
+                ->whereIn('status', ['pending', 'approved'])
+                ->get(['employee_id', 'date', 'type']);
+
+            $existingKeys = [];
+            foreach ($existing as $e) {
+                $existingKeys[$e->employee_id . '|' . (string) $e->date . '|' . (string) $e->type] = true;
+            }
+
+            $nextId = ((int) LateRequest::query()->max('id')) + 1;
+            $now = now();
+            $toInsert = [];
+
+            $hasDailySummary = [];
+            foreach ($dailyRows as $d) {
+                $empCode = (string) ($d['employee_code'] ?? '');
+                $empId = $employeeIdByCode[$empCode] ?? null;
+                if (!$empId) {
+                    continue;
+                }
+
+                $date = (string) ($d['summary_date'] ?? '');
+                if ($date === '') {
+                    continue;
+                }
+
+                $hasDailySummary[$empId . '|' . $date] = true;
+            }
+
+            foreach ($dailyRows as $d) {
+                $empCode = (string) ($d['employee_code'] ?? '');
+                $empId = $employeeIdByCode[$empCode] ?? null;
+                if (!$empId) {
+                    continue;
+                }
+
+                $date = (string) ($d['summary_date'] ?? '');
+                if ($date === '') {
+                    continue;
+                }
+
+                $typeCandidates = [];
+
+                $lateMinutes = (int) ($d['late_in_minutes'] ?? 0) + (int) ($d['late_break_in_minutes'] ?? 0);
+                if ($lateMinutes > 0) {
+                    $typeCandidates['late'] = $lateMinutes;
+                }
+
+                $undertimeMinutes = (int) ($d['undertime_break_out_minutes'] ?? 0);
+                if ($undertimeMinutes > 0) {
+                    $typeCandidates['undertime'] = $undertimeMinutes;
+                }
+
+                $missedLogs = (int) ($d['missed_logs'] ?? 0);
+                if ($missedLogs > 0) {
+                    $typeCandidates['missed_logs'] = null;
+                }
+
+                foreach ($typeCandidates as $type => $minutes) {
+                    $key = $empId . '|' . $date . '|' . $type;
+                    if (isset($existingKeys[$key])) {
+                        continue;
+                    }
+
+                    $existingKeys[$key] = true;
+
+                    $toInsert[] = [
+                        'id' => $nextId++,
+                        'employee_id' => $empId,
+                        'import_batch_id' => $batch->id,
+                        'date' => $date,
+                        'type' => $type,
+                        'minutes' => $minutes,
+                        'detected_from_summary' => true,
+                        'reason' => null,
+                        'attachment_path' => null,
+                        'status' => 'pending',
+                        'approved_by' => null,
+                        'admin_notes' => null,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+            }
+
+            // Employees usually work 5 days a week (Mon-Fri). If a weekday inside the imported
+            // date range has NO daily summary at all for an employee, flag it as missed logs.
+            // This allows employees to file a justification even if they forgot to log.
+            $rangeStart = Carbon::parse((string) $minDate)->startOfDay();
+            $rangeEnd = Carbon::parse((string) $maxDate)->startOfDay();
+            foreach ($employeeIdByCode as $empCode => $empId) {
+                if (!$empId) {
+                    continue;
+                }
+
+                for ($d = $rangeStart->copy(); $d->lte($rangeEnd); $d->addDay()) {
+                    if ($d->isWeekend()) {
+                        continue;
+                    }
+
+                    $dateStr = $d->format('Y-m-d');
+                    if (isset($hasDailySummary[$empId . '|' . $dateStr])) {
+                        continue;
+                    }
+
+                    $key = $empId . '|' . $dateStr . '|missed_logs';
+                    if (isset($existingKeys[$key])) {
+                        continue;
+                    }
+
+                    $existingKeys[$key] = true;
+                    $toInsert[] = [
+                        'id' => $nextId++,
+                        'employee_id' => $empId,
+                        'import_batch_id' => $batch->id,
+                        'date' => $dateStr,
+                        'type' => 'missed_logs',
+                        'minutes' => null,
+                        'detected_from_summary' => true,
+                        'reason' => null,
+                        'attachment_path' => null,
+                        'status' => 'pending',
+                        'approved_by' => null,
+                        'admin_notes' => null,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+            }
+
+            if (count($toInsert)) {
+                LateRequest::query()->insert($toInsert);
+            }
+
+            $existingAbsences = AbsenceNotice::query()
+                ->whereIn('employee_id', array_values(array_unique(array_filter(array_values($employeeIdByCode)))))
+                ->whereDate('date', '>=', $minDate)
+                ->whereDate('date', '<=', $maxDate)
+                ->whereIn('status', ['pending', 'approved'])
+                ->get(['employee_id', 'date']);
+
+            $existingAbsenceKeys = [];
+            foreach ($existingAbsences as $e) {
+                $existingAbsenceKeys[$e->employee_id . '|' . (string) $e->date] = true;
+            }
+
+            $nextAbsenceId = ((int) AbsenceNotice::query()->max('id')) + 1;
+            $toInsertAbsences = [];
+
+            foreach ($dailyRows as $d) {
+                if (($d['status'] ?? '') !== 'ABSENT') {
+                    continue;
+                }
+
+                $empCode = (string) ($d['employee_code'] ?? '');
+                $empId = $employeeIdByCode[$empCode] ?? null;
+                if (!$empId) {
+                    continue;
+                }
+
+                $date = (string) ($d['summary_date'] ?? '');
+                if ($date === '') {
+                    continue;
+                }
+
+                $key = $empId . '|' . $date;
+                if (isset($existingAbsenceKeys[$key])) {
+                    continue;
+                }
+
+                $existingAbsenceKeys[$key] = true;
+                $toInsertAbsences[] = [
+                    'id' => $nextAbsenceId++,
+                    'employee_id' => $empId,
+                    'import_batch_id' => $batch->id,
+                    'date' => $date,
+                    'detected_from_summary' => true,
+                    'reason' => null,
+                    'attachment_path' => null,
+                    'status' => 'pending',
+                    'approved_by' => null,
+                    'admin_notes' => null,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+
+            if (count($toInsertAbsences)) {
+                AbsenceNotice::query()->insert($toInsertAbsences);
+            }
         });
 
         return response()->json([
@@ -862,24 +1064,10 @@ class AttendanceCsvUploadController extends Controller
 
     private function mapStatusToDb(string $jsStatus, int $missingPunchesCount, bool $isAbsent): string
     {
-        if ($isAbsent) {
-            return 'ABSENT';
-        }
-
-        $statusLower = Str::lower($jsStatus);
-        if (Str::contains($statusLower, 'incomplete') || $missingPunchesCount > 0) {
-            return 'MISSED_LOG';
-        }
-
-        if (Str::contains($statusLower, 'late')) {
-            return 'LATE';
-        }
-
-        if (Str::contains($statusLower, 'undertime')) {
-            return 'UNDERTIME';
-        }
-
-        return 'ON_TIME';
+        // Store the detailed UI status string directly so reports can support fractional absences.
+        // Examples: Ontime, Late, Undertime, Late & Undertime, Incomplete Logs,
+        // Absent AM, Absent PM, Whole Day Absent, Half Day (Incomplete Logs)
+        return trim($jsStatus);
     }
 
     private function buildPeriodSummaries(array $dailyRows, string $periodStart, string $periodEnd, $now): array
@@ -894,11 +1082,28 @@ class AttendanceCsvUploadController extends Controller
             $lateFrequency = 0;
             $missedLogsCount = 0;
             $graceDays = 0;
-            $absences = 0;
-            $daysWorked = 0;
+            $absences = 0.0;
+            $daysWorked = 0.0;
             $lateDuration = 0;
             $totalUndertime = 0;
             $undertimeFrequency = 0;
+
+            $absenceValueForStatus = function ($status): float {
+                $s = strtolower(trim((string) ($status ?? '')));
+                if ($s === '') {
+                    return 0.0;
+                }
+
+                if ($s === 'absent' || $s === 'whole day absent') {
+                    return 1.0;
+                }
+
+                if (str_contains($s, 'absent am') || str_contains($s, 'absent pm') || str_contains($s, 'half day (incomplete')) {
+                    return 0.5;
+                }
+
+                return 0.0;
+            };
 
             $lateTimeCounts = [];
             foreach ($days as $d) {
@@ -907,10 +1112,12 @@ class AttendanceCsvUploadController extends Controller
                     $graceDays += 1;
                 }
 
-                if (($d['status'] ?? '') === 'ABSENT') {
-                    $absences += 1;
+                $absenceValue = $absenceValueForStatus($d['status'] ?? null);
+                if ($absenceValue > 0) {
+                    $absences += $absenceValue;
+                    $daysWorked += max(1.0 - $absenceValue, 0.0);
                 } else {
-                    $daysWorked += 1;
+                    $daysWorked += 1.0;
                 }
 
                 $lateIn = (int) ($d['late_in_minutes'] ?? 0);

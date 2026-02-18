@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\EmployeeScheduleOverride;
+use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
+use App\Services\ActivityLogger;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class LeaveRequestController extends Controller
 {
@@ -34,8 +37,17 @@ class LeaveRequestController extends Controller
 
         $requests = $query->orderByDesc('id')->paginate(20)->withQueryString();
 
+        $leaveBalances = [];
+        if ($employee) {
+            $leaveBalances = LeaveBalance::query()
+                ->where('employee_id', $employee->id)
+                ->where('year', now()->year)
+                ->get();
+        }
+
         return view('leave-requests.index', [
             'requests' => $requests,
+            'leaveBalances' => $leaveBalances,
             'filters' => [
                 'status' => $status,
             ],
@@ -61,18 +73,27 @@ class LeaveRequestController extends Controller
         ]);
 
         $leaveType = strtolower(trim((string) $validated['leave_type']));
-        if ($leaveType !== 'leave without pay') {
-            return Redirect::back()->withErrors(['leave_type' => 'Time off type must be leave without pay.'])->withInput();
-        }
 
         if ($validated['day_type'] === 'half_day' && $validated['start_date'] !== $validated['end_date']) {
             return Redirect::back()->withErrors(['end_date' => 'Half-day time off must have the same start and end date.'])->withInput();
         }
 
-        $days = (\Carbon\Carbon::parse($validated['start_date'])->startOfDay())
-            ->diffInDays(\Carbon\Carbon::parse($validated['end_date'])->startOfDay()) + 1;
+        $days = (Carbon::parse($validated['start_date'])->startOfDay())
+            ->diffInDays(Carbon::parse($validated['end_date'])->startOfDay()) + 1;
 
         $durationDays = $validated['day_type'] === 'half_day' ? 0.5 : (float) $days;
+
+        if ($leaveType !== 'leave without pay') {
+            $balance = LeaveBalance::query()
+                ->where('employee_id', $employee->id)
+                ->where('leave_type', $leaveType)
+                ->where('year', Carbon::parse($validated['start_date'])->year)
+                ->first();
+
+            if ($balance && (float) $balance->remaining < $durationDays) {
+                return Redirect::back()->withErrors(['leave_type' => "Insufficient {$leaveType} balance. Remaining: {$balance->remaining} days."])->withInput();
+            }
+        }
 
         $attachmentPath = null;
         if ($request->hasFile('attachment')) {
@@ -84,7 +105,7 @@ class LeaveRequestController extends Controller
         LeaveRequest::query()->create([
             'id' => $nextId,
             'employee_id' => $employee->id,
-            'leave_type' => 'leave without pay',
+            'leave_type' => $leaveType,
             'start_date' => $validated['start_date'],
             'end_date' => $validated['end_date'],
             'day_type' => $validated['day_type'],
@@ -94,6 +115,8 @@ class LeaveRequestController extends Controller
             'status' => 'pending',
             'approved_by' => null,
         ]);
+
+        ActivityLogger::log('created', 'LeaveRequest', $nextId, "Created {$leaveType} request for {$durationDays} days");
 
         return Redirect::route('leave-requests.index')->with('status', 'leave-request-created');
     }
@@ -114,6 +137,22 @@ class LeaveRequestController extends Controller
         $lr->approved_by = optional($user->employee)->id;
         $lr->admin_notes = $validated['admin_notes'] ?? null;
         $lr->save();
+
+        $leaveType = Str::lower(trim((string) $lr->leave_type));
+        if ($leaveType !== '' && !Str::contains($leaveType, 'without pay')) {
+            $balance = LeaveBalance::query()
+                ->where('employee_id', $lr->employee_id)
+                ->where('leave_type', $leaveType)
+                ->where('year', Carbon::parse($lr->start_date)->year)
+                ->first();
+
+            if ($balance) {
+                $duration = (float) $lr->duration_days;
+                $balance->used = (float) $balance->used + $duration;
+                $balance->remaining = max((float) $balance->total_credits - (float) $balance->used, 0);
+                $balance->save();
+            }
+        }
 
         $employeeId = (int) $lr->employee_id;
         $start = Carbon::parse($lr->start_date)->startOfDay();
@@ -146,6 +185,8 @@ class LeaveRequestController extends Controller
             ]);
         }
 
+        ActivityLogger::log('approved', 'LeaveRequest', $lr->id, "Approved leave request #{$lr->id}");
+
         return Redirect::back();
     }
 
@@ -165,6 +206,8 @@ class LeaveRequestController extends Controller
         $lr->approved_by = optional($user->employee)->id;
         $lr->admin_notes = $validated['admin_notes'] ?? null;
         $lr->save();
+
+        ActivityLogger::log('rejected', 'LeaveRequest', $lr->id, "Rejected leave request #{$lr->id}");
 
         return Redirect::back();
     }

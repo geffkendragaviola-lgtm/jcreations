@@ -28,13 +28,8 @@
                         <x-nav-link :href="route('payroll.index')" :active="request()->routeIs('payroll.*')">
                             {{ __('Payroll') }}
                         </x-nav-link>
-
                         <x-nav-link :href="route('employees.index')" :active="request()->routeIs('employees.*')">
                             {{ __('Employees') }}
-                        </x-nav-link>
-
-                        <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
-                            {{ __('Users') }}
                         </x-nav-link>
 
                         <x-nav-link :href="route('work-schedules.index')" :active="request()->routeIs('work-schedules.*')">
@@ -43,6 +38,22 @@
 
                         <x-nav-link :href="route('departments.index')" :active="request()->routeIs('departments.*')">
                             {{ __('Departments') }}
+                        </x-nav-link>
+
+                        <x-nav-link :href="route('holidays.index')" :active="request()->routeIs('holidays.*')">
+                            {{ __('Holidays') }}
+                        </x-nav-link>
+
+                        <x-nav-link :href="route('leave-balances.index')" :active="request()->routeIs('leave-balances.*')">
+                            {{ __('Leave Balances') }}
+                        </x-nav-link>
+
+                        <x-nav-link :href="route('disciplinary-actions.index')" :active="request()->routeIs('disciplinary-actions.*')">
+                            {{ __('Disciplinary') }}
+                        </x-nav-link>
+
+                        <x-nav-link :href="route('reports.index')" :active="request()->routeIs('reports.*')">
+                            {{ __('Reports') }}
                         </x-nav-link>
                     @endif
                 </div>
@@ -114,12 +125,12 @@
                     {{ __('Payroll') }}
                 </x-responsive-nav-link>
 
-                <x-responsive-nav-link :href="route('employees.index')" :active="request()->routeIs('employees.*')">
-                    {{ __('Employees') }}
-                </x-responsive-nav-link>
-
                 <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                     {{ __('Users') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('employees.index')" :active="request()->routeIs('employees.*')">
+                    {{ __('Employees') }}
                 </x-responsive-nav-link>
 
                 <x-responsive-nav-link :href="route('work-schedules.index')" :active="request()->routeIs('work-schedules.*')">
@@ -128,6 +139,22 @@
 
                 <x-responsive-nav-link :href="route('departments.index')" :active="request()->routeIs('departments.*')">
                     {{ __('Departments') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('holidays.index')" :active="request()->routeIs('holidays.*')">
+                    {{ __('Holidays') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('leave-balances.index')" :active="request()->routeIs('leave-balances.*')">
+                    {{ __('Leave Balances') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('disciplinary-actions.index')" :active="request()->routeIs('disciplinary-actions.*')">
+                    {{ __('Disciplinary') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('reports.index')" :active="request()->routeIs('reports.*')">
+                    {{ __('Reports') }}
                 </x-responsive-nav-link>
             @endif
         </div>

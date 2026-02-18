@@ -38,6 +38,7 @@
                                     <x-input-label for="cr_request_type" :value="__('Request Type')" />
                                     <select id="cr_request_type" class="mt-1 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full" x-model="requestType">
                                         <option value="absence">Absence (Time Off)</option>
+                                        <option value="absence_notice">Unfiled Absence (Justification)</option>
                                         <option value="overtime">Overtime</option>
                                         <option value="late">Late / Undertime / Missed Logs</option>
                                         <option value="cash_advance">Cash Advance</option>
@@ -83,6 +84,35 @@
                                         <div>
                                             <x-input-label for="cr_leave_attachment" :value="__('Attachment (Optional)')" />
                                             <input id="cr_leave_attachment" name="attachment" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" class="mt-1 block w-full" />
+                                            <x-input-error class="mt-2" :messages="$errors->get('attachment')" />
+                                        </div>
+
+                                        <div class="flex justify-end gap-2">
+                                            <x-secondary-button type="button" x-on:click="$dispatch('close-modal', 'create-request')">Cancel</x-secondary-button>
+                                            <x-primary-button>{{ __('Submit') }}</x-primary-button>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                <div x-show="requestType === 'absence_notice'" x-cloak>
+                                    <form method="POST" action="{{ route('absence-notices.store') }}" class="space-y-4" enctype="multipart/form-data">
+                                        @csrf
+                                        <input type="hidden" name="_request_type" value="absence_notice" />
+
+                                        <div class="text-sm text-gray-600">File a justification for a date that was detected as ABSENT in time tracking.</div>
+                                        <div>
+                                            <x-input-label for="cr_absence_notice_date" :value="__('Date')" />
+                                            <x-text-input id="cr_absence_notice_date" name="date" type="date" class="mt-1 block w-full" :value="old('date')" required />
+                                            <x-input-error class="mt-2" :messages="$errors->get('date')" />
+                                        </div>
+                                        <div>
+                                            <x-input-label for="cr_absence_notice_reason" :value="__('Reason')" />
+                                            <x-text-input id="cr_absence_notice_reason" name="reason" type="text" class="mt-1 block w-full" :value="old('reason')" />
+                                            <x-input-error class="mt-2" :messages="$errors->get('reason')" />
+                                        </div>
+                                        <div>
+                                            <x-input-label for="cr_absence_notice_attachment" :value="__('Attachment (Optional)')" />
+                                            <input id="cr_absence_notice_attachment" name="attachment" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" class="mt-1 block w-full" />
                                             <x-input-error class="mt-2" :messages="$errors->get('attachment')" />
                                         </div>
 
@@ -608,6 +638,79 @@
                             </div>
                         </div>
                     </div>
+
+                    @if (!empty($forRelease))
+                        <div class="mt-4">
+                            <div class="text-sm font-semibold text-gray-900">For Release (Given)</div>
+                            <div class="text-xs text-gray-500">Approved requests that are not yet released. Release first, then it will be deducted on the next payroll.</div>
+
+                            <div class="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                <div class="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div class="text-sm font-semibold text-gray-900">Cash Advance</div>
+                                            <div class="text-xs text-gray-500">Approved but not yet given</div>
+                                        </div>
+                                        <div class="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-900 font-semibold">{{ (int) ($forRelease['counts']['cash_advance'] ?? 0) }}</div>
+                                    </div>
+
+                                    <div class="mt-3 space-y-2 max-h-64 overflow-auto pr-1">
+                                        @forelse (($forRelease['cash_advance'] ?? []) as $r)
+                                            <div class="rounded-lg bg-gray-50 border border-gray-200 p-3">
+                                                <div class="flex items-start justify-between gap-2">
+                                                    <div class="min-w-0">
+                                                        <div class="truncate text-sm font-semibold text-gray-900">{{ $r->employee?->full_name }}</div>
+                                                        <div class="text-xs text-gray-600">₱{{ number_format((float) $r->amount, 2) }}</div>
+                                                    </div>
+                                                    <div class="shrink-0">
+                                                        <form method="POST" action="{{ route('cash-advance-requests.release', $r->id) }}" class="inline">
+                                                            @csrf
+                                                            @method('patch')
+                                                            <x-primary-button>Mark as Given</x-primary-button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @empty
+                                            <div class="text-sm text-gray-500">No cash advances for release.</div>
+                                        @endforelse
+                                    </div>
+                                </div>
+
+                                <div class="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div class="text-sm font-semibold text-gray-900">Loan</div>
+                                            <div class="text-xs text-gray-500">Approved but not yet given</div>
+                                        </div>
+                                        <div class="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-900 font-semibold">{{ (int) ($forRelease['counts']['loan'] ?? 0) }}</div>
+                                    </div>
+
+                                    <div class="mt-3 space-y-2 max-h-64 overflow-auto pr-1">
+                                        @forelse (($forRelease['loan'] ?? []) as $r)
+                                            <div class="rounded-lg bg-gray-50 border border-gray-200 p-3">
+                                                <div class="flex items-start justify-between gap-2">
+                                                    <div class="min-w-0">
+                                                        <div class="truncate text-sm font-semibold text-gray-900">{{ $r->employee?->full_name }}</div>
+                                                        <div class="text-xs text-gray-600">₱{{ number_format((float) $r->amount, 2) }}@if ($r->term_months) · {{ $r->term_months }}mo @endif</div>
+                                                    </div>
+                                                    <div class="shrink-0">
+                                                        <form method="POST" action="{{ route('loan-requests.release', $r->id) }}" class="inline">
+                                                            @csrf
+                                                            @method('patch')
+                                                            <x-primary-button>Mark as Given</x-primary-button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @empty
+                                            <div class="text-sm text-gray-500">No loans for release.</div>
+                                        @endforelse
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
                 </div>
             @endif
 
@@ -972,10 +1075,13 @@
                                     <th class="text-left py-2">Employee</th>
                                     <th class="text-left py-2">Amount</th>
                                     <th class="text-left py-2">Reason</th>
+                                    <th class="text-left py-2">Details</th>
                                     <th class="text-left py-2">Attachment</th>
                                     <th class="text-left py-2">Admin Notes</th>
                                     <th class="text-left py-2">Status</th>
                                     <th class="text-left py-2">Approved By</th>
+                                    <th class="text-left py-2">Released</th>
+                                    <th class="text-left py-2">Deducted</th>
                                     @if (auth()->user()?->canManageBackoffice())
                                         <th class="text-left py-2">Actions</th>
                                     @endif
@@ -987,6 +1093,9 @@
                                         <td class="py-2">{{ $r->employee?->full_name }}</td>
                                         <td class="py-2">₱{{ number_format((float) $r->amount, 2) }}</td>
                                         <td class="py-2">{{ $r->reason }}</td>
+                                        <td class="py-2">
+                                            <a class="text-indigo-700 underline" href="{{ route('cash-advance-requests.show', $r->id) }}">View</a>
+                                        </td>
                                         <td class="py-2">
                                             @if ($r->attachment_path)
                                                 <a class="text-indigo-700 underline" href="{{ asset('storage/' . $r->attachment_path) }}" target="_blank">View</a>
@@ -1016,51 +1125,35 @@
                                             <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold {{ $badge }}">{{ ucfirst($st) }}</span>
                                         </td>
                                         <td class="py-2">{{ $r->approver?->full_name }}</td>
+                                        <td class="py-2">
+                                            @if ($r->released_at)
+                                                {{ optional($r->released_at)->format('Y-m-d') }}
+                                                @if ($r->releaser)
+                                                    <div class="text-xs text-gray-600">{{ $r->releaser?->full_name }}</div>
+                                                @endif
+                                            @else
+                                                -
+                                            @endif
+                                        </td>
+                                        <td class="py-2">
+                                            @if ($r->deducted_at)
+                                                {{ optional($r->deducted_at)->format('Y-m-d') }}
+                                            @else
+                                                -
+                                            @endif
+                                        </td>
                                         @if (auth()->user()?->canManageBackoffice())
                                             <td class="py-2">
                                                 @if ($r->status === 'pending')
                                                     <x-secondary-button type="button" x-data x-on:click="$dispatch('open-modal', 'approve-cash-advance-table-{{ $r->id }}')">Approve</x-secondary-button>
                                                     <x-danger-button type="button" x-data x-on:click="$dispatch('open-modal', 'reject-cash-advance-table-{{ $r->id }}')">Reject</x-danger-button>
 
-                                                    <x-modal name="approve-cash-advance-table-{{ $r->id }}" :show="false" focusable>
-                                                        <form method="POST" action="{{ route('cash-advance-requests.approve', $r->id) }}" class="p-6 space-y-4">
-                                                            @csrf
-                                                            @method('patch')
-
-                                                            <div class="text-lg font-medium text-gray-900">Approve Cash Advance Request</div>
-                                                            <div class="text-sm text-gray-600">Optional: add notes for the employee.</div>
-
-                                                            <div>
-                                                                <x-input-label for="cash_advance_admin_notes_approve_table_{{ $r->id }}" :value="__('Admin Notes (Optional)')" />
-                                                                <textarea id="cash_advance_admin_notes_approve_table_{{ $r->id }}" name="admin_notes" rows="3" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"></textarea>
-                                                            </div>
-
-                                                            <div class="flex justify-end gap-2">
-                                                                <x-secondary-button type="button" x-on:click="$dispatch('close-modal', 'approve-cash-advance-table-{{ $r->id }}')">Cancel</x-secondary-button>
-                                                                <x-primary-button>Approve</x-primary-button>
-                                                            </div>
-                                                        </form>
-                                                    </x-modal>
-
-                                                    <x-modal name="reject-cash-advance-table-{{ $r->id }}" :show="false" focusable>
-                                                        <form method="POST" action="{{ route('cash-advance-requests.reject', $r->id) }}" class="p-6 space-y-4">
-                                                            @csrf
-                                                            @method('patch')
-
-                                                            <div class="text-lg font-medium text-gray-900">Reject Cash Advance Request</div>
-                                                            <div class="text-sm text-gray-600">Optional: add rejection reason/notes for the employee.</div>
-
-                                                            <div>
-                                                                <x-input-label for="cash_advance_admin_notes_reject_table_{{ $r->id }}" :value="__('Admin Notes (Optional)')" />
-                                                                <textarea id="cash_advance_admin_notes_reject_table_{{ $r->id }}" name="admin_notes" rows="3" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"></textarea>
-                                                            </div>
-
-                                                            <div class="flex justify-end gap-2">
-                                                                <x-secondary-button type="button" x-on:click="$dispatch('close-modal', 'reject-cash-advance-table-{{ $r->id }}')">Cancel</x-secondary-button>
-                                                                <x-danger-button>Reject</x-danger-button>
-                                                            </div>
-                                                        </form>
-                                                    </x-modal>
+                                                @elseif ($r->status === 'approved' && !$r->released_at)
+                                                    <form method="POST" action="{{ route('cash-advance-requests.release', $r->id) }}" class="inline">
+                                                        @csrf
+                                                        @method('patch')
+                                                        <x-primary-button>Mark as Given</x-primary-button>
+                                                    </form>
                                                 @else
                                                     -
                                                 @endif
@@ -1086,10 +1179,12 @@
                                     <th class="text-left py-2">Amount</th>
                                     <th class="text-left py-2">Term</th>
                                     <th class="text-left py-2">Purpose</th>
+                                    <th class="text-left py-2">Details</th>
                                     <th class="text-left py-2">Attachment</th>
                                     <th class="text-left py-2">Admin Notes</th>
                                     <th class="text-left py-2">Status</th>
                                     <th class="text-left py-2">Approved By</th>
+                                    <th class="text-left py-2">Released</th>
                                     @if (auth()->user()?->canManageBackoffice())
                                         <th class="text-left py-2">Actions</th>
                                     @endif
@@ -1102,6 +1197,9 @@
                                         <td class="py-2">₱{{ number_format((float) $r->amount, 2) }}</td>
                                         <td class="py-2">{{ $r->term_months ? ($r->term_months . ' months') : '-' }}</td>
                                         <td class="py-2">{{ $r->purpose }}</td>
+                                        <td class="py-2">
+                                            <a class="text-indigo-700 underline" href="{{ route('loan-requests.show', $r->id) }}">View</a>
+                                        </td>
                                         <td class="py-2">
                                             @if ($r->attachment_path)
                                                 <a class="text-indigo-700 underline" href="{{ asset('storage/' . $r->attachment_path) }}" target="_blank">View</a>
@@ -1131,6 +1229,16 @@
                                             <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold {{ $badge }}">{{ ucfirst($st) }}</span>
                                         </td>
                                         <td class="py-2">{{ $r->approver?->full_name }}</td>
+                                        <td class="py-2">
+                                            @if ($r->released_at)
+                                                {{ optional($r->released_at)->format('Y-m-d') }}
+                                                @if ($r->releaser)
+                                                    <div class="text-xs text-gray-600">{{ $r->releaser?->full_name }}</div>
+                                                @endif
+                                            @else
+                                                -
+                                            @endif
+                                        </td>
                                         @if (auth()->user()?->canManageBackoffice())
                                             <td class="py-2">
                                                 @if ($r->status === 'pending')
@@ -1176,6 +1284,13 @@
                                                             </div>
                                                         </form>
                                                     </x-modal>
+
+                                                @elseif ($r->status === 'approved' && !$r->released_at)
+                                                    <form method="POST" action="{{ route('loan-requests.release', $r->id) }}" class="inline">
+                                                        @csrf
+                                                        @method('patch')
+                                                        <x-primary-button>Mark as Given</x-primary-button>
+                                                    </form>
                                                 @else
                                                     -
                                                 @endif
